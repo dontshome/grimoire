@@ -55,6 +55,11 @@ Grimoire is a free, open-source client for managing World of Warcraft addons. Pl
 
 **No warranty.** Grimoire is provided "as is", without warranty of any kind, under the MIT License. You use it at your own risk.
 
+## Contributors
+
+- **[dontshome](https://github.com/dontshome)** — author and maintainer.
+- **[Blake Burns Technologies Inc.](https://github.com/Blake-Burns-Technologies)** — macOS support and platform testing; cross-volume (EXDEV) install fix; download, archive, and IPC hardening; CurseForge API key validation; keeping credentials out of the renderer process.
+
 ## License
 
 [MIT](LICENSE)
