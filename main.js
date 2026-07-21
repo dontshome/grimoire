@@ -33,20 +33,34 @@ function detectWowPath() {
 // it is short-lived and re-arrives every time the ad loads.
 let wagoPublicToken = "";
 
+function defaultSettings() {
+  return {
+    wowPath: "",
+    curseApiKey: "",
+    wagoApiKey: "",
+    providerChoice: {},
+    matchedIds: {},
+    releaseChannel: "stable",
+    channelChoice: {},
+  };
+}
+
 function loadSettings() {
   let s;
+  const file = settingsFile();
   try {
-    s = JSON.parse(fs.readFileSync(settingsFile(), "utf8"));
+    s = JSON.parse(fs.readFileSync(file, "utf8"));
   } catch {
-    s = {
-      wowPath: "",
-      curseApiKey: "",
-      wagoApiKey: "",
-      providerChoice: {},
-      matchedIds: {},
-      releaseChannel: "stable",
-      channelChoice: {},
-    };
+    // A missing file is normal (first run). A file that EXISTS but won't parse
+    // is corruption — preserve a copy so the user's keys are never just lost,
+    // and fall back to the most recent good backup if we have one.
+    if (fs.existsSync(file)) {
+      try { fs.copyFileSync(file, `${file}.corrupt-${Date.now()}`); } catch {}
+      try {
+        s = JSON.parse(fs.readFileSync(`${file}.bak`, "utf8"));
+      } catch { /* no usable backup */ }
+    }
+    if (!s) s = defaultSettings();
   }
   if (!s.wowPath) s.wowPath = detectWowPath();
   if (!s.providerChoice) s.providerChoice = {};
@@ -87,8 +101,24 @@ function readUserKeys() {
 function saveSettings(s) {
   const copy = { ...s };
   delete copy.wagoPublicToken;
-  fs.mkdirSync(path.dirname(settingsFile()), { recursive: true });
-  fs.writeFileSync(settingsFile(), JSON.stringify(copy, null, 2), "utf8");
+  delete copy.bundledActive;
+  delete copy.wagoKeyConfigured;
+  // Never persist bundled keys into settings.json — they belong to the build,
+  // not the user, and are re-read from bundled.dat every launch. (Internal
+  // callers pass a merged settings object that may carry them.)
+  if (copy.curseApiKey && copy.curseApiKey === bundledKeys.curseApiKey) copy.curseApiKey = "";
+  if (copy.wagoApiKey && copy.wagoApiKey === bundledKeys.wagoApiKey) copy.wagoApiKey = "";
+
+  const file = settingsFile();
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  // Keep a one-generation backup of the last good file so a corrupt read can
+  // recover the user's keys.
+  try { if (fs.existsSync(file)) fs.copyFileSync(file, `${file}.bak`); } catch {}
+  // Atomic write: write to a temp file, then rename over the target. A crash
+  // mid-write can never leave a truncated/corrupt settings.json.
+  const tmp = `${file}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(copy, null, 2), "utf8");
+  fs.renameSync(tmp, file);
 }
 
 // ---------------------------------------------------------------- window

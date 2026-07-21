@@ -1,7 +1,7 @@
 {
   "name": "grimoire",
   "productName": "Grimoire",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "World of Warcraft addon manager — CurseForge and Wago in one place",
   "main": "main.js",
   "author": "dontshome",
@@ -68,7 +68,8 @@
       "createStartMenuShortcut": true,
       "shortcutName": "Grimoire",
       "installerHeaderIcon": "build/icon.ico",
-      "uninstallDisplayName": "Grimoire ${version}"
+      "uninstallDisplayName": "Grimoire ${version}",
+      "deleteAppDataOnUninstall": false
     }
   }
 }
