@@ -1,11 +1,17 @@
-// Generates build/icon.ico by drawing the rune on a Chromium canvas in an
-// offscreen window (reliable pixels), then packing the PNGs into an .ico.
-// Run with: electron build/make-icon.js
+// Generates build/icon.ico and build/icon.png by drawing the rune on a Chromium
+// canvas in an offscreen window (reliable pixels), then packing the PNGs into
+// an .ico. Run with: electron build/make-icon.js
 const { app, BrowserWindow } = require("electron");
 const fs = require("fs");
 const path = require("path");
 
+// The .ico format stores side length in one byte, so 256 (written as 0) is its
+// ceiling — these are the sizes packed into icon.ico for Windows.
 const SIZES = [16, 24, 32, 48, 64, 128, 256];
+
+// macOS wants at least 512x512 and electron-builder derives the .icns from this
+// single PNG, so render a 1024 master rather than reusing the 256 ico frame.
+const MASTER_SIZE = 1024;
 
 const drawPage = `<!doctype html><meta charset="utf8"><body style="margin:0">
 <canvas id="c"></canvas>
@@ -66,8 +72,13 @@ app.whenReady().then(async () => {
     const bad = pngs.filter((p) => p.length < 100).length;
     const ico = buildIco(pngs);
     fs.writeFileSync(path.join(__dirname, "icon.ico"), ico);
-    fs.writeFileSync(path.join(__dirname, "icon.png"), pngs[pngs.length - 1]);
+
+    const masterUrl = await win.webContents.executeJavaScript(`draw(${MASTER_SIZE})`);
+    const master = Buffer.from(masterUrl.split(",")[1], "base64");
+    fs.writeFileSync(path.join(__dirname, "icon.png"), master);
+
     console.log(`wrote icon.ico ${ico.length} bytes; smallest png ${Math.min(...pngs.map(p => p.length))}; empty ${bad}`);
+    console.log(`wrote icon.png ${MASTER_SIZE}x${MASTER_SIZE} ${master.length} bytes`);
   } catch (e) {
     console.error("ICON FAIL", e);
   }

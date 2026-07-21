@@ -17,6 +17,7 @@ const state = {
   checking: false,
   wagoConnected: false,
   categories: [],     // CurseForge category list [{id,name}]
+  flavors: [],
   browseResults: [],
   browseShown: 30,
   browseQuery: { query: "", categoryId: undefined, categoryName: undefined },
@@ -411,6 +412,7 @@ async function scan() {
   const res = await window.grimoire.scanAddons();
   if (res.error === "noWowPath" || res.error === "badWowPath") {
     state.packages = [];
+    if (res.flavors) renderFlavorSwitcher(res.flavors, res.flavor);
     render();
     setStatus("WoW folder not found — set it in Settings.");
     openSettings();
@@ -420,6 +422,7 @@ async function scan() {
     toast(`Scan failed: ${res.error}`, "error");
     return;
   }
+  if (res.flavors) renderFlavorSwitcher(res.flavors, res.flavor);
   state.packages = res.packages;
   // Removing an addon can retire the category or provider the sidebar filter
   // is pointing at, which would leave the list stuck showing nothing with no
@@ -867,6 +870,40 @@ function openDetailForResult(r, installedPkg) {
 
 // ---------------------------------------------------------------- browse
 
+// ---------------------------------------------------------------- game flavor
+
+// Populate the WoW-version switcher from whatever clients are installed.
+// Hidden entirely when there's only one — no choice to present.
+function renderFlavorSwitcher(list, current) {
+  const sel = $("#flavor-select");
+  if (!sel) return;
+  state.flavors = list || [];
+  sel.innerHTML = "";
+  for (const f of state.flavors) {
+    const o = document.createElement("option");
+    o.value = f.id;
+    o.textContent = f.name;
+    sel.appendChild(o);
+  }
+  if (current) sel.value = current;
+  sel.classList.toggle("solo", state.flavors.length <= 1);
+}
+
+// Switching game version means a different AddOns folder and different
+// provider builds, so drop everything version-specific and rescan.
+async function switchFlavor(flavorId) {
+  state.settings = await window.grimoire.saveSettings({ ...state.settings, flavor: flavorId });
+  state.updates = {};
+  state.browseResults = [];
+  state.browseCursor = null;
+  state.status = "all";
+  state.category = "all";
+  state.provider = "all";
+  const name = (state.flavors.find((f) => f.id === flavorId) || {}).name || flavorId;
+  toast(`Now managing ${name}.`, "ok");
+  await scan();
+}
+
 function switchTab(tab) {
   state.tab = tab;
   $("#tab-installed").classList.toggle("active", tab === "installed");
@@ -1101,35 +1138,24 @@ async function loadBrowseCategories() {
 
 // ---------------------------------------------------------------- wago ad
 
-// Reload the ad panel to obtain a fresh token (the public one expires).
-function refreshWagoAd() {
-  const wv = $("#wago-ad-frame webview");
-  if (!wv) return;
-  try {
-    wv.reload();
-  } catch {
-    /* webview not ready yet — the periodic refresh will retry */
-  }
-}
-
-async function initWagoAd() {
-  // A Wago key is already configured (the user's own, or bundled into this
-  // build) — Wago works without the ad panel, so don't run a live third-party
-  // ad webview at all. This keeps the app lean and avoids the ad being the
-  // one unpredictable, focus-grabbing element in the window.
-  if (state.settings.wagoKeyConfigured) {
-    const pill = $("#wago-status");
-    pill.textContent = "connected ✓";
-    pill.classList.add("ok");
-    const group = $("#wago-ad-group");
-    if (group) group.classList.add("hidden");
-    state.wagoConnected = true;
+// Create the Wago ad panel (or reload it if it already exists) to obtain a
+// public token. Called on demand: at startup when no key is configured, and
+// whenever a Wago request is rejected — so a saved-but-invalid key, or an
+// expired public token, recovers itself instead of leaving Wago dead.
+async function ensureWagoAd() {
+  const frame = $("#wago-ad-frame");
+  if (!frame) return;
+  const existing = frame.querySelector("webview");
+  if (existing) {
+    try { existing.reload(); } catch { /* not ready yet; a later refresh retries */ }
     return;
   }
   try {
-    const status = await window.grimoire.wagoStatus();
-    if (status.connected) setWagoConnected();
-    window.grimoire.onWagoRefresh(refreshWagoAd);
+    const group = $("#wago-ad-group");
+    if (group) group.classList.remove("hidden");
+    const pill = $("#wago-status");
+    pill.textContent = "connecting…";
+    pill.classList.remove("ok");
     const preload = await window.grimoire.wagoAdPreloadPath();
     const wv = document.createElement("webview");
     wv.setAttribute("preload", preload);
@@ -1142,10 +1168,37 @@ async function initWagoAd() {
     // No popups — ad pages have no legitimate reason to open windows in-app,
     // and pop-unders can steal focus from the main window.
     wv.setAttribute("partition", "persist:wagoad");
-    $("#wago-ad-frame").appendChild(wv);
+    frame.appendChild(wv);
   } catch {
     $("#wago-status").textContent = "unavailable";
   }
+}
+
+async function initWagoAd() {
+  // A Wago key is already configured (the user's own, or bundled into this
+  // build) — Wago works without the ad panel, so don't run a live third-party
+  // ad webview at all. This keeps the app lean and avoids the ad being the
+  // one unpredictable, focus-grabbing element in the window.
+  // ALWAYS listen for refresh requests, including when we skip the ad below —
+  // that signal is what lets a broken/expired token recover by loading the ad.
+  window.grimoire.onWagoRefresh(ensureWagoAd);
+
+  if (state.settings.wagoKeyConfigured) {
+    // A key is configured, so assume it works and don't run the ad panel. If
+    // it turns out to be invalid, the first 401 triggers wago:refresh above
+    // and the ad panel loads then.
+    const pill = $("#wago-status");
+    pill.textContent = "connected ✓";
+    pill.classList.add("ok");
+    const group = $("#wago-ad-group");
+    if (group) group.classList.add("hidden");
+    state.wagoConnected = true;
+    return;
+  }
+
+  const status = await window.grimoire.wagoStatus().catch(() => ({}));
+  if (status.connected) setWagoConnected();
+  ensureWagoAd();
 }
 
 function setWagoConnected() {
@@ -1210,6 +1263,7 @@ function wire() {
 
   $("#tab-installed").addEventListener("click", () => switchTab("installed"));
   $("#tab-browse").addEventListener("click", () => switchTab("browse"));
+  $("#flavor-select").addEventListener("change", (e) => switchFlavor(e.target.value));
   $("#btn-browse-search").addEventListener("click", browseSearch);
   $("#browse-query").addEventListener("keydown", (e) => {
     if (e.key === "Enter") { clearTimeout(browseDebounce); browseSearch(); }
@@ -1257,6 +1311,22 @@ function wire() {
   });
 
   window.grimoire.onWagoConnected(setWagoConnected);
+
+  // Re-scan when the window regains focus. Scanning takes ~40ms, and it means
+  // a WoW client that finished installing (or addons changed by another tool)
+  // shows up without the user having to hit Rescan.
+  let lastFocusScan = Date.now();
+  window.addEventListener("focus", () => {
+    if (Date.now() - lastFocusScan < 5000) return; // debounce rapid alt-tabbing
+    lastFocusScan = Date.now();
+    const before = state.flavors.length;
+    scan().then(() => {
+      if (state.flavors.length > before) {
+        const names = state.flavors.map((f) => f.name).join(", ");
+        toast(`New World of Warcraft version detected. Now available: ${names}.`, "ok");
+      }
+    });
+  });
 }
 
 async function boot() {

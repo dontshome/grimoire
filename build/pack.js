@@ -22,21 +22,60 @@ const OUT = path.join(ROOT, "dist");
 const builderCli = path.join(ROOT, "node_modules", "electron-builder", "out", "cli", "cli.js");
 
 function settingsPath() {
-  // electron's app.getPath("userData") on Windows = %APPDATA%/<productName>
-  return path.join(process.env.APPDATA || os.homedir(), "Grimoire", "settings.json");
-}
-
-function authorKeys() {
-  const raw = JSON.parse(fs.readFileSync(settingsPath(), "utf8"));
-  const keys = { curseApiKey: raw.curseApiKey || "", wagoApiKey: raw.wagoApiKey || "" };
-  if (!keys.curseApiKey && !keys.wagoApiKey) {
-    throw new Error("No API keys found in settings.json — set them in the app first.");
+  // Mirrors electron's app.getPath("userData") per platform.
+  if (process.platform === "win32") {
+    return path.join(process.env.APPDATA || path.join(os.homedir(), "AppData", "Roaming"),
+      "Grimoire", "settings.json");
   }
-  return keys;
+  if (process.platform === "darwin") {
+    return path.join(os.homedir(), "Library", "Application Support", "Grimoire", "settings.json");
+  }
+  return path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), ".config"),
+    "Grimoire", "settings.json");
 }
 
-function runBuilder(artifactName) {
-  execFileSync(process.execPath, [builderCli, "--win", "nsis", "-c.nsis.artifactName", artifactName], {
+// The app now encrypts credentials at rest with electron's safeStorage, which
+// is backed by the OS keyring and unreachable from plain node. So the dad build
+// takes its keys from the environment:
+//
+//   GRIMOIRE_CURSE_KEY=… GRIMOIRE_WAGO_KEY=… node build/pack.js dad
+//
+// Pre-encryption settings.json files are still read as a fallback so this keeps
+// working on a machine that has not launched the new build yet.
+function authorKeys() {
+  const keys = {
+    curseApiKey: process.env.GRIMOIRE_CURSE_KEY || "",
+    wagoApiKey: process.env.GRIMOIRE_WAGO_KEY || "",
+  };
+  if (keys.curseApiKey || keys.wagoApiKey) return keys;
+
+  let raw = {};
+  try { raw = JSON.parse(fs.readFileSync(settingsPath(), "utf8")); } catch { /* absent */ }
+  keys.curseApiKey = raw.curseApiKey || "";
+  keys.wagoApiKey = raw.wagoApiKey || "";
+  if (keys.curseApiKey || keys.wagoApiKey) return keys;
+
+  if (raw.curseApiKeyEnc || raw.wagoApiKeyEnc) {
+    throw new Error(
+      "settings.json holds encrypted keys, which this script cannot read.\n" +
+      "Pass them explicitly instead:\n" +
+      "  GRIMOIRE_CURSE_KEY=… GRIMOIRE_WAGO_KEY=… node build/pack.js dad"
+    );
+  }
+  throw new Error("No API keys found — set them in the app, or pass GRIMOIRE_CURSE_KEY / GRIMOIRE_WAGO_KEY.");
+}
+
+// suffix is "" for the public build and "-dad" for the keyed one. Each platform
+// names its own artifact — electron-builder can only build the host's format,
+// so running this on macOS produces the dmg/zip and on Windows the nsis exe.
+function runBuilder(suffix) {
+  const args = [builderCli];
+  if (process.platform === "darwin") {
+    args.push("--mac", "-c.mac.artifactName", `\${productName}-\${version}-mac-\${arch}${suffix}.\${ext}`);
+  } else {
+    args.push("--win", "nsis", "-c.nsis.artifactName", `Grimoire-Setup-\${version}${suffix}.exe`);
+  }
+  execFileSync(process.execPath, args, {
     cwd: ROOT,
     stdio: "inherit",
     env: { ...process.env },
@@ -46,7 +85,7 @@ function runBuilder(artifactName) {
 function buildClean() {
   if (fs.existsSync(DAT)) fs.unlinkSync(DAT);
   console.log("\n=== Building CLEAN public installer ===");
-  runBuilder("Grimoire-Setup-${version}.exe");
+  runBuilder("");
 }
 
 function buildDad() {
@@ -54,7 +93,7 @@ function buildDad() {
   fs.writeFileSync(DAT, encrypt(keys), "utf8");
   console.log("\n=== Building DAD installer (keys embedded) ===");
   try {
-    runBuilder("Grimoire-Setup-${version}-dad.exe");
+    runBuilder("-dad");
   } finally {
     fs.unlinkSync(DAT); // never leave keys in the tree
   }
@@ -68,7 +107,8 @@ try {
   // ends up referencing the public installer, not the private dad one.
   else { buildDad(); buildClean(); }
   console.log("\nDone. Installers are in:", OUT);
-  for (const f of fs.readdirSync(OUT).filter((f) => f.endsWith(".exe"))) {
+  const artifacts = /\.(exe|dmg|zip)$/i;
+  for (const f of fs.readdirSync(OUT).filter((f) => artifacts.test(f))) {
     console.log("  " + f);
   }
 } catch (e) {

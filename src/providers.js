@@ -17,7 +17,12 @@ const CF_API = "https://api.curseforge.com/v1";
 const WAGO_API = "https://addons.wago.io/api/external";
 const WOWI_API = "https://api.mmoui.com/v3/game/WOW";
 const TUKUI_API = "https://api.tukui.org/v1";
-const RETAIL_GAME_VERSION_TYPE = 517; // CurseForge's id for retail
+const RETAIL_GAME_VERSION_TYPE = 517; // CurseForge's id for retail (default)
+const flavors = require("./flavors");
+
+// CurseForge gameVersionTypeId / Wago game_version for the flavor in play.
+function cfTypeOf(settings) { return flavors.byId(settings && settings.flavor).cfTypeId; }
+function wagoGameOf(settings) { return flavors.byId(settings && settings.flavor).wago; }
 const CF_GAME_WOW = 1;
 const CF_CLASS_ADDONS = 1;
 const CF_SORT_POPULARITY = 2;
@@ -106,11 +111,11 @@ function cfDownloadUrl(fileId, fileName) {
 // CurseForge releaseType: 1 = release, 2 = beta, 3 = alpha.
 const CF_RELEASE_TYPE = { stable: 1, beta: 2, alpha: 3 };
 
-function cfPickLatestFile(mod, channel = "stable") {
+function cfPickLatestFile(mod, channel = "stable", gvType = RETAIL_GAME_VERSION_TYPE) {
   const maxType = CF_RELEASE_TYPE[channel] || 1;
   const indexes = (mod.latestFilesIndexes || []).filter(
     (i) =>
-      (!i.gameVersionTypeId || i.gameVersionTypeId === RETAIL_GAME_VERSION_TYPE) &&
+      (!i.gameVersionTypeId || i.gameVersionTypeId === gvType) &&
       (i.releaseType || 1) <= maxType
   );
   // Among the channels the user allows, take the newest build rather than
@@ -132,10 +137,10 @@ function cfPickLatestFile(mod, channel = "stable") {
 // only what really exists rather than a fixed stable/beta/alpha menu.
 const CF_TYPE_TO_CHANNEL = { 1: "stable", 2: "beta", 3: "alpha" };
 
-function cfChannelVersions(mod) {
+function cfChannelVersions(mod, gvType = RETAIL_GAME_VERSION_TYPE) {
   const out = {};
   const retailIdx = (mod.latestFilesIndexes || []).filter(
-    (i) => !i.gameVersionTypeId || i.gameVersionTypeId === RETAIL_GAME_VERSION_TYPE
+    (i) => !i.gameVersionTypeId || i.gameVersionTypeId === gvType
   );
   for (const idx of retailIdx) {
     const ch = CF_TYPE_TO_CHANNEL[idx.releaseType || 1];
@@ -152,10 +157,10 @@ function cfChannelVersions(mod) {
   return out;
 }
 
-function cfModToResult(mod, channel = "stable") {
-  const file = cfPickLatestFile(mod, channel);
+function cfModToResult(mod, channel = "stable", gvType = RETAIL_GAME_VERSION_TYPE) {
+  const file = cfPickLatestFile(mod, channel, gvType);
   const allVersions = (mod.latestFiles || []).flatMap((f) => f.gameVersions || []);
-  const channelVersions = cfChannelVersions(mod);
+  const channelVersions = cfChannelVersions(mod, gvType);
   return {
     provider: "curseforge",
     id: String(mod.id),
@@ -180,7 +185,7 @@ async function cfOfficial(pathname, apiKey, opts = {}) {
 }
 
 // All check* functions return maps keyed by package key.
-async function checkCurse(packages, apiKey, channelOf = () => "stable") {
+async function checkCurse(packages, apiKey, channelOf = () => "stable", gvType = RETAIL_GAME_VERSION_TYPE) {
   const withIds = packages.filter((p) => p.curseId && /^\d+$/.test(p.curseId));
   if (!withIds.length) return {};
   const out = {};
@@ -197,7 +202,7 @@ async function checkCurse(packages, apiKey, channelOf = () => "stable") {
   });
   const byModId = {};
   for (const mod of data.data || []) byModId[String(mod.id)] = mod;
-  for (const p of withIds) if (byModId[p.curseId]) out[p.key] = cfModToResult(byModId[p.curseId], channelOf(p));
+  for (const p of withIds) if (byModId[p.curseId]) out[p.key] = cfModToResult(byModId[p.curseId], channelOf(p), gvType);
   return out;
 }
 
@@ -206,7 +211,7 @@ const CF_PAGE_SIZE = 50;
 async function searchCurse(
   query,
   apiKey,
-  { categoryId, pageSize = CF_PAGE_SIZE, index = 0, sortOrder = "desc", channel = "stable" } = {}
+  { categoryId, pageSize = CF_PAGE_SIZE, index = 0, sortOrder = "desc", channel = "stable", gvType = RETAIL_GAME_VERSION_TYPE } = {}
 ) {
   if (!apiKey) return { results: [], note: "CurseForge search needs an API key (Settings)." };
   const params = new URLSearchParams({
@@ -221,9 +226,10 @@ async function searchCurse(
   // website API's name and gets silently ignored here.
   if (query) params.set("searchFilter", query);
   if (categoryId) params.set("categoryId", String(categoryId));
+  params.set("gameVersionTypeId", String(gvType));
   const data = await cfOfficial(`/mods/search?${params}`, apiKey);
   return {
-    results: (data.data || []).map((m) => cfModToResult(m, channel)),
+    results: (data.data || []).map((m) => cfModToResult(m, channel, gvType)),
     total: (data.pagination || {}).totalCount || 0,
   };
 }
@@ -374,7 +380,7 @@ async function wagoPost(pathname, tokens, body) {
 // _match endpoint identify them. This works even when .toc files carry
 // stale or missing X-Wago-IDs, and returns releases in the same call.
 // Falls back to per-id lookups for anything _match doesn't recognize.
-async function checkWago(packages, tokens, addonsDir, channelOf = () => "stable") {
+async function checkWago(packages, tokens, addonsDir, channelOf = () => "stable", game = "retail") {
   const out = {};
   if (!packages.length) return out;
 
@@ -426,7 +432,7 @@ async function checkWago(packages, tokens, addonsDir, channelOf = () => "stable"
 
   await mapLimit(unresolved.filter((p) => p.wagoId), 4, async (p) => {
     try {
-      const addon = await wagoGet(`/addons/${encodeURIComponent(p.wagoId)}?game_version=retail&stability=${channelOf(p)}`, tokens);
+      const addon = await wagoGet(`/addons/${encodeURIComponent(p.wagoId)}?game_version=${game}&stability=${channelOf(p)}`, tokens);
       const r = wagoToResult(addon, channelOf(p));
       if (r.remoteVersion) out[p.key] = r;
     } catch (err) {
@@ -438,9 +444,9 @@ async function checkWago(packages, tokens, addonsDir, channelOf = () => "stable"
   return out;
 }
 
-async function searchWago(query, tokens, channel = "stable") {
+async function searchWago(query, tokens, channel = "stable", game = "retail") {
   try {
-    const j = await wagoGet(`/addons/_search?query=${encodeURIComponent(query)}&game_version=retail&stability=${channel}`, tokens);
+    const j = await wagoGet(`/addons/_search?query=${encodeURIComponent(query)}&game_version=${game}&stability=${channel}`, tokens);
     const list = j.data || j.addons || (Array.isArray(j) ? j : []);
     return { results: list.map((a) => wagoToResult(a, channel)) };
   } catch (err) {
@@ -449,9 +455,9 @@ async function searchWago(query, tokens, channel = "stable") {
   }
 }
 
-async function popularWago(tokens, channel = "stable") {
+async function popularWago(tokens, channel = "stable", game = "retail") {
   try {
-    const j = await wagoGet(`/addons/popular?game_version=retail&stability=${channel}`, tokens);
+    const j = await wagoGet(`/addons/popular?game_version=${game}&stability=${channel}`, tokens);
     const list = j.data || j.addons || (Array.isArray(j) ? j : []);
     return list.map((a) => wagoToResult(a, channel));
   } catch {
@@ -509,10 +515,16 @@ async function checkWowi(packages) {
 
 // WoWInterface publishes its whole catalog (~8k addons) in one cached call,
 // so paging is a local slice — no extra requests, and nothing is out of reach.
-async function searchWowi(query, { offset = 0, limit = CF_PAGE_SIZE } = {}) {
+// WoWInterface serves ONE catalog for every game version, so filter by each
+// file's declared compatibility instead of hitting a per-flavor endpoint.
+async function searchWowi(query, { offset = 0, limit = CF_PAGE_SIZE, wantFlavor = "Retail" } = {}) {
   const list = await wowiFilelist();
   const q = query.toLowerCase();
   const qn = normName(query);
+  const matchesFlavor = (f) => {
+    const fl = flavorsFromVersions((f.UICompatibility || []).map((c) => c.version));
+    return !fl.length || fl.includes(wantFlavor);
+  };
   const hits = (query
     ? list.filter(
         (f) =>
@@ -520,7 +532,7 @@ async function searchWowi(query, { offset = 0, limit = CF_PAGE_SIZE } = {}) {
           (f.UIAuthorName || "").toLowerCase().includes(q)
       )
     : list
-  ).sort((a, b) => Number(b.UIDownloadMonthly || 0) - Number(a.UIDownloadMonthly || 0));
+  ).filter(matchesFlavor).sort((a, b) => Number(b.UIDownloadMonthly || 0) - Number(a.UIDownloadMonthly || 0));
   return {
     results: hits.slice(offset, offset + limit).map(wowiToResult),
     total: hits.length,
@@ -708,8 +720,8 @@ async function checkUpdates(packages, settings) {
 
   const fetched = {};
   const jobs = [
-    ["curseforge", () => checkCurse(byProvider.curseforge, settings.curseApiKey, (p) => channelFor(p, settings))],
-    ["wago", () => checkWago(byProvider.wago, wagoTokens, addonsDir, (p) => channelFor(p, settings))],
+    ["curseforge", () => checkCurse(byProvider.curseforge, settings.curseApiKey, (p) => channelFor(p, settings), cfTypeOf(settings))],
+    ["wago", () => checkWago(byProvider.wago, wagoTokens, addonsDir, (p) => channelFor(p, settings), wagoGameOf(settings))],
     ["wowinterface", () => checkWowi(byProvider.wowinterface)],
     ["tukui", () => checkTukui(byProvider.tukui)],
   ];
@@ -853,10 +865,10 @@ async function resolveInstall(provider, id, settings, channel = "stable") {
       throw new Error("A CurseForge API key is required (add it in Settings — free at console.curseforge.com)");
     }
     const data = await cfOfficial(`/mods/${id}`, settings.curseApiKey);
-    return cfModToResult(data.data, channel);
+    return cfModToResult(data.data, channel, cfTypeOf(settings));
   }
   if (provider === "wago") {
-    const addon = await wagoGet(`/addons/${encodeURIComponent(id)}?game_version=retail&stability=${channel}`, wagoTokensOf(settings));
+    const addon = await wagoGet(`/addons/${encodeURIComponent(id)}?game_version=${wagoGameOf(settings)}&stability=${channel}`, wagoTokensOf(settings));
     return wagoToResult(addon, channel);
   }
   if (provider === "wowinterface") {
@@ -1077,13 +1089,14 @@ async function search(
       index: cur.cfIndex,
       sortOrder: cur.cfOrder,
       channel: browseChannel,
+      gvType: cfTypeOf(settings),
     });
     let results = r1.results || [];
     // The compacted spelling ("craft sim" → "craftsim") only matters for the
     // first page; later pages are pure continuations of the main query.
     if (cur.cfIndex === 0 && cur.cfOrder === "desc" && qCompact.toLowerCase() !== q.toLowerCase()) {
       try {
-        const r2 = await searchCurse(qCompact, settings.curseApiKey, { categoryId });
+        const r2 = await searchCurse(qCompact, settings.curseApiKey, { categoryId, gvType: cfTypeOf(settings) });
         results = [...results, ...(r2.results || [])];
       } catch { /* variant is best-effort */ }
     }
@@ -1119,7 +1132,7 @@ async function search(
       return { results: [] };
     }
     if (cur.wowiDone) return { results: [] };
-    const r = await searchWowi(q, { offset: cur.wowiOffset });
+    const r = await searchWowi(q, { offset: cur.wowiOffset, wantFlavor: flavors.byId(settings.flavor).wowiFlavor });
     cur.wowiOffset += CF_PAGE_SIZE;
     if (!r.hasMore) cur.wowiDone = true;
     return r;
@@ -1138,10 +1151,13 @@ async function search(
             "Wago",
             async () =>
               q
-                ? await searchWago(q, wagoTokensOf(settings), browseChannel)
-                : { results: await popularWago(wagoTokensOf(settings), browseChannel) },
+                ? await searchWago(q, wagoTokensOf(settings), browseChannel, wagoGameOf(settings))
+                : { results: await popularWago(wagoTokensOf(settings), browseChannel, wagoGameOf(settings)) },
           ],
-          ["Tukui", async () => (q ? searchTukui(q) : { results: (await tukuiAddons()).map(tukuiToResult) })],
+          // Tukui publishes retail builds only, so it contributes nothing elsewhere.
+          ...(flavors.byId(settings.flavor).tukui
+            ? [["Tukui", async () => (q ? searchTukui(q) : { results: (await tukuiAddons()).map(tukuiToResult) })]]
+            : []),
         ]
       : []),
   ];
@@ -1229,7 +1245,7 @@ async function matchProviders(pkg, settings) {
 
   const jobs = [];
   if (!have.has("curseforge") && settings.curseApiKey) {
-    jobs.push(searchCurse(pkg.name, settings.curseApiKey, { pageSize: 10 })
+    jobs.push(searchCurse(pkg.name, settings.curseApiKey, { pageSize: 10, gvType: cfTypeOf(settings) })
       .then((r) => tryMatch(r.results, "curseforge")).catch(() => {}));
   }
   if (!have.has("wago") && wagoTokensOf(settings).length) {

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog, shell, safeStorage } = require("electron");
 const path = require("path");
 const fs = require("fs");
 
@@ -6,6 +6,7 @@ const scanner = require("./src/scanner");
 const providers = require("./src/providers");
 const installer = require("./src/installer");
 const { readBundledKeys } = require("./src/bundledKeys");
+const flavors = require("./src/flavors");
 let autoUpdater;
 try { ({ autoUpdater } = require("electron-updater")); } catch { /* dev without the dep */ }
 
@@ -16,15 +17,111 @@ const bundledKeys = readBundledKeys(__dirname);
 
 const settingsFile = () => path.join(app.getPath("userData"), "settings.json");
 
-const DEFAULT_WOW_PATHS = [
-  "C:\\Program Files (x86)\\World of Warcraft\\_retail_",
-  "C:\\Program Files\\World of Warcraft\\_retail_",
-  "D:\\World of Warcraft\\_retail_",
+// ------------------------------------------------------- credentials at rest
+
+// Fields holding credentials. On disk they live encrypted under "<field>Enc";
+// the bare name is used in memory and by the legacy plaintext format we
+// migrate away from on first launch.
+const SECRET_FIELDS = ["curseApiKey", "wagoApiKey"];
+
+// safeStorage wraps DPAPI on Windows and the Keychain on macOS, so ciphertext
+// is bound to this OS user account. It is unavailable on Linux desktops with
+// no keyring — there we keep working in plaintext rather than lose the keys.
+function encryptionAvailable() {
+  try { return safeStorage.isEncryptionAvailable(); } catch { return false; }
+}
+
+function encryptSecret(value) {
+  if (!value || !encryptionAvailable()) return "";
+  try { return safeStorage.encryptString(value).toString("base64"); } catch { return ""; }
+}
+
+function decryptSecret(blob) {
+  if (!blob) return "";
+  try { return safeStorage.decryptString(Buffer.from(blob, "base64")); } catch { return ""; }
+}
+
+// Pulls credentials out of a parsed settings object, accepting the encrypted
+// form and the legacy plaintext one so upgrades are seamless either way.
+function readSecrets(raw) {
+  const out = {};
+  for (const f of SECRET_FIELDS) {
+    const enc = raw[`${f}Enc`];
+    out[f] = enc ? decryptSecret(enc) : (raw[f] || "");
+  }
+  return out;
+}
+
+// True when the file still holds plaintext credentials we can upgrade.
+function hasLegacySecrets(raw) {
+  return SECRET_FIELDS.some((f) => raw[f]);
+}
+
+// Best-effort redaction of plaintext credentials in a file we cannot parse.
+function redactSecretsInText(text) {
+  let out = text;
+  for (const f of SECRET_FIELDS) {
+    out = out.replace(new RegExp(`("${f}"\\s*:\\s*)"[^"]*"`, "g"), `$1"<redacted>"`);
+  }
+  return out;
+}
+
+// A corrupt file is kept for recovery, but it must not become another copy of
+// the user's credentials. The name is fixed rather than timestamped so these
+// cannot accumulate the way the old settings.json.corrupt-<ts> files did.
+function preserveCorrupt(file) {
+  try {
+    fs.writeFileSync(`${file}.corrupt`, redactSecretsInText(fs.readFileSync(file, "utf8")), "utf8");
+  } catch { /* best effort — never block startup over this */ }
+}
+
+// One-time upgrade at launch: rewrite plaintext credentials in encrypted form
+// and neutralise the plaintext copies older builds left lying around.
+function migrateSecretsAtRest() {
+  const file = settingsFile();
+  let raw = null;
+  try { raw = JSON.parse(fs.readFileSync(file, "utf8")); } catch { /* absent or corrupt */ }
+
+  if (raw && hasLegacySecrets(raw) && encryptionAvailable()) {
+    saveSettings(loadSettings());
+    // saveSettings snapshots the *previous* file into .bak — which is the
+    // plaintext one we are migrating away from. Overwrite it with the
+    // encrypted result so no plaintext generation survives the upgrade.
+    try { fs.copyFileSync(file, `${file}.bak`); } catch { /* best effort */ }
+  }
+
+  // Older builds wrote a timestamped copy on every corrupt read, each holding a
+  // full set of plaintext keys, and nothing ever pruned them. Redact in place
+  // rather than delete — they may still have recovery value, but they should
+  // not be credential stores.
+  try {
+    const dir = path.dirname(file);
+    for (const name of fs.readdirSync(dir)) {
+      if (!name.startsWith("settings.json.corrupt")) continue;
+      const p = path.join(dir, name);
+      const text = fs.readFileSync(p, "utf8");
+      const redacted = redactSecretsInText(text);
+      if (redacted !== text) fs.writeFileSync(p, redacted, "utf8");
+    }
+  } catch { /* best effort */ }
+}
+
+// Probed in order; paths for the other platform simply never exist, so the
+// list can stay flat rather than branching on process.platform.
+const DEFAULT_WOW_ROOTS = [
+  "C:\\Program Files (x86)\\World of Warcraft",
+  "C:\\Program Files\\World of Warcraft",
+  "D:\\World of Warcraft",
+  "D:\\Games\\World of Warcraft",
+  "/Applications/World of Warcraft",
+  path.join(require("os").homedir(), "Applications", "World of Warcraft"),
 ];
 
+// wowPath is the WoW *root*, which holds every client folder (_retail_,
+// _classic_era_, _classic_, PTRs …). Each flavor is a subfolder of it.
 function detectWowPath() {
-  for (const p of DEFAULT_WOW_PATHS) {
-    if (fs.existsSync(path.join(p, "Interface", "AddOns"))) return p;
+  for (const root of DEFAULT_WOW_ROOTS) {
+    if (flavors.detectFlavors(root).length) return root;
   }
   return "";
 }
@@ -55,23 +152,41 @@ function loadSettings() {
     // is corruption — preserve a copy so the user's keys are never just lost,
     // and fall back to the most recent good backup if we have one.
     if (fs.existsSync(file)) {
-      try { fs.copyFileSync(file, `${file}.corrupt-${Date.now()}`); } catch {}
+      preserveCorrupt(file);
       try {
         s = JSON.parse(fs.readFileSync(`${file}.bak`, "utf8"));
       } catch { /* no usable backup */ }
     }
     if (!s) s = defaultSettings();
   }
+  // Migration: older settings stored the retail client folder itself
+  // (…/World of Warcraft/_retail_). Normalize to the root and keep retail
+  // selected so existing installs carry over untouched.
+  const normalized = flavors.normalizeRoot(s.wowPath);
+  if (normalized !== s.wowPath) {
+    if (!s.flavor) s.flavor = "retail";
+    s.wowPath = normalized;
+  }
   if (!s.wowPath) s.wowPath = detectWowPath();
+  // Fall back to whatever flavor is actually installed if the saved one isn't.
+  const installed = flavors.detectFlavors(s.wowPath);
+  if (!s.flavor || !installed.some((f) => f.id === s.flavor)) {
+    s.flavor = (installed[0] && installed[0].id) || "retail";
+  }
   if (!s.providerChoice) s.providerChoice = {};
   if (!s.matchedIds) s.matchedIds = {};
   if (!s.channelChoice) s.channelChoice = {};
   if (!s.releaseChannel) s.releaseChannel = "stable";
   s.wagoPublicToken = wagoPublicToken; // runtime-only, never persisted
-  // Bundled keys are a silent fallback: used only when the user hasn't set
-  // their own, and never written back to settings.json or shown in the UI.
-  s.curseApiKey = s.curseApiKey || bundledKeys.curseApiKey || "";
-  s.wagoApiKey = s.wagoApiKey || bundledKeys.wagoApiKey || "";
+  // Decrypt the user's own keys (or read them from the legacy plaintext form),
+  // then fall back to the bundled build keys. Bundled keys are a silent
+  // fallback: never written back to settings.json or shown in the UI.
+  const secrets = readSecrets(s);
+  // The ciphertext has no business travelling to the renderer alongside the
+  // decrypted value it duplicates.
+  for (const f of SECRET_FIELDS) delete s[`${f}Enc`];
+  s.curseApiKey = secrets.curseApiKey || bundledKeys.curseApiKey || "";
+  s.wagoApiKey = secrets.wagoApiKey || bundledKeys.wagoApiKey || "";
   return s;
 }
 
@@ -91,8 +206,7 @@ function userVisibleSettings() {
 
 function readUserKeys() {
   try {
-    const raw = JSON.parse(fs.readFileSync(settingsFile(), "utf8"));
-    return { curseApiKey: raw.curseApiKey || "", wagoApiKey: raw.wagoApiKey || "" };
+    return readSecrets(JSON.parse(fs.readFileSync(settingsFile(), "utf8")));
   } catch {
     return { curseApiKey: "", wagoApiKey: "" };
   }
@@ -108,6 +222,20 @@ function saveSettings(s) {
   // callers pass a merged settings object that may carry them.)
   if (copy.curseApiKey && copy.curseApiKey === bundledKeys.curseApiKey) copy.curseApiKey = "";
   if (copy.wagoApiKey && copy.wagoApiKey === bundledKeys.wagoApiKey) copy.wagoApiKey = "";
+
+  // Credentials are encrypted at rest, so the plaintext field never reaches
+  // disk. If the platform has no keyring we fall back to plaintext rather than
+  // silently dropping the user's keys — a broken app is worse than this file
+  // being no worse than it was before.
+  for (const f of SECRET_FIELDS) {
+    const plain = copy[f];
+    delete copy[f];
+    delete copy[`${f}Enc`];
+    if (!plain) continue;
+    const enc = encryptSecret(plain);
+    if (enc) copy[`${f}Enc`] = enc;
+    else copy[f] = plain;
+  }
 
   const file = settingsFile();
   fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -157,6 +285,8 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  // Must run after ready — safeStorage has no keyring to talk to before that.
+  migrateSecretsAtRest();
   createWindow();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -235,7 +365,7 @@ function overlayMatchedIds(packages, settings) {
 }
 
 function addonsDirOf(settings) {
-  return path.join(settings.wowPath, "Interface", "AddOns");
+  return flavors.addonsDirFor(settings.wowPath, settings.flavor);
 }
 
 // Release channel for an install/resolve job: per-addon override, else global.
@@ -304,8 +434,18 @@ ipcMain.handle("addons:scan", () => {
   const s = loadSettings();
   if (!s.wowPath) return { error: "noWowPath", packages: [] };
   const addonsDir = addonsDirOf(s);
-  if (!fs.existsSync(addonsDir)) return { error: "badWowPath", packages: [] };
-  const res = scanner.scan(addonsDir);
+  const installedFlavors = flavors.detectFlavors(s.wowPath);
+  if (!fs.existsSync(addonsDir)) {
+    // A client that exists but has no AddOns folder yet (never launched):
+    // report an empty library rather than an error.
+    if (installedFlavors.some((f) => f.id === s.flavor)) {
+      return { packages: [], scannedFolders: 0, tookMs: 0, flavors: installedFlavors, flavor: s.flavor };
+    }
+    return { error: "badWowPath", packages: [], flavors: installedFlavors };
+  }
+  const res = scanner.scan(addonsDir, flavors.byId(s.flavor).tocSuffix);
+  res.flavors = flavors.detectFlavors(s.wowPath);
+  res.flavor = s.flavor;
   overlayMatchedIds(res.packages || [], s);
   if (importWagoAppChannels(res.packages || [], s)) saveSettings(s);
   // Tell the UI which channel each addon resolves to.
@@ -332,6 +472,7 @@ ipcMain.handle("updates:install", async (_e, job) => {
   const s = loadSettings();
   // Resolve a fresh download URL when the caller doesn't have one (WoWI
   // search results, provider switches, stale links).
+  flavors.ensureAddonsDir(s.wowPath, s.flavor);
   if (!job.downloadUrl && job.provider && job.id) {
     const r = await providers.resolveInstall(job.provider, job.id, s, channelOfJob(job, s));
     if (!r || !r.downloadUrl) throw new Error("No download available from " + job.provider);

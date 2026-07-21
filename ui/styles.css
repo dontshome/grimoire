@@ -384,6 +384,22 @@ input:focus { border-color: var(--gold); box-shadow: 0 0 0 3px rgba(200, 162, 74
 
 .cell-latest.warn { color: var(--hot); }
 
+.flavor-select {
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--gold-bright);
+  background: linear-gradient(180deg, #3a2f14, #2a2210);
+  border: 1px solid rgba(200, 162, 74, 0.5);
+  border-radius: 8px;
+  padding: 7px 10px;
+  cursor: pointer;
+  outline: none;
+}
+.flavor-select:hover { border-color: var(--gold); }
+.flavor-select option { background: var(--bg-raise-2); color: var(--text); }
+/* Hidden when only one game version is installed — no choice to make. */
+.flavor-select.solo { display: none; }
+
 .field-hint {
   display: block;
   margin-top: 6px;

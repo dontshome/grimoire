@@ -12,14 +12,15 @@ function stripWowCodes(s) {
     .trim();
 }
 
-// Pick the .toc that applies to retail: Folder.toc, then Folder_Mainline.toc,
-// then any other .toc as a last resort.
-function findToc(dir, folderName) {
-  const preferred = [
-    `${folderName}.toc`,
-    `${folderName}_Mainline.toc`,
-    `${folderName}-Mainline.toc`,
-  ];
+// Blizzard suffixes .toc files per client: Foo_Mainline.toc (retail),
+// Foo_Vanilla.toc (Classic Era), Foo_Mists.toc (MoP Classic), and so on. Pick
+// the one matching the flavor being scanned, then fall back to the plain .toc.
+function findToc(dir, folderName, tocSuffix = ["Mainline"]) {
+  const preferred = [];
+  for (const suffix of tocSuffix) {
+    preferred.push(`${folderName}_${suffix}.toc`, `${folderName}-${suffix}.toc`);
+  }
+  preferred.push(`${folderName}.toc`);
   for (const name of preferred) {
     const p = path.join(dir, name);
     if (fs.existsSync(p)) return p;
@@ -69,9 +70,9 @@ function readGrimoireMarker(dir) {
   }
 }
 
-function readFolder(addonsDir, folderName) {
+function readFolder(addonsDir, folderName, tocSuffix) {
   const dir = path.join(addonsDir, folderName);
-  const tocPath = findToc(dir, folderName);
+  const tocPath = findToc(dir, folderName, tocSuffix);
   if (!tocPath) return null;
   const meta = parseToc(tocPath);
   return {
@@ -134,7 +135,7 @@ function parseInterfaceVersion(interfaceField) {
   };
 }
 
-function scan(addonsDir) {
+function scan(addonsDir, tocSuffix = ["Mainline"]) {
   const started = Date.now();
   let entries;
   try {
@@ -148,7 +149,7 @@ function scan(addonsDir) {
 
   const byFolder = {};
   for (const name of entries) {
-    const info = readFolder(addonsDir, name);
+    const info = readFolder(addonsDir, name, tocSuffix);
     if (info) byFolder[name] = info;
   }
 
