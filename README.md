@@ -41,9 +41,19 @@ The installer is unsigned, so Windows SmartScreen will warn on first run — cho
 
 Grimoire never hosts or redistributes any addon. It downloads each addon directly from its provider using that provider's own links, on your behalf.
 
-## Disclaimer
+## Legal & Terms of Use
 
-Grimoire is an independent project, not affiliated with or endorsed by Blizzard Entertainment, Overwolf, CurseForge, Wago, WoWInterface, or Tukui. World of Warcraft is a trademark of Blizzard Entertainment. All addon names and trademarks belong to their respective owners.
+Grimoire is a free, open-source client for managing World of Warcraft addons. Please read the following before using or distributing it.
+
+**Bring your own credentials.** Grimoire does not include or provide access to any provider's service. To use CurseForge you must supply your own CurseForge API key, obtained directly from CurseForge ([console.curseforge.com](https://console.curseforge.com)). By doing so you agree to CurseForge's and Overwolf's API Terms of Service, and you — not the authors of Grimoire — are responsible for complying with them. The same applies to any Wago, WoWInterface, or Tukui credentials you use. Grimoire acts only as a client that sends requests using the credentials you provide, much like a web browser.
+
+**No addon content is hosted or redistributed.** Grimoire does not store, bundle, mirror, or redistribute any addon. When you install or update an addon, Grimoire downloads it directly from the provider you selected, using that provider's own download links, on your behalf. All addons remain the property of their respective authors and are subject to those authors' and providers' terms.
+
+**Official interfaces only.** Grimoire communicates with each provider through that provider's official or public API. It does not circumvent access controls, rate limits, or authentication.
+
+**No affiliation.** Grimoire is an independent project and is not affiliated with, endorsed by, or sponsored by Blizzard Entertainment, Overwolf, CurseForge, Wago, WoWInterface, or Tukui. World of Warcraft is a trademark of Blizzard Entertainment. All product names, logos, and trademarks are the property of their respective owners and are used for identification purposes only.
+
+**No warranty.** Grimoire is provided "as is", without warranty of any kind, under the MIT License. You use it at your own risk.
 
 ## License
 
