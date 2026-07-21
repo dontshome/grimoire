@@ -1,13 +1,14 @@
 {
   "name": "grimoire",
   "productName": "Grimoire",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "World of Warcraft addon manager — CurseForge and Wago in one place",
   "main": "main.js",
   "author": "dontshome",
   "license": "MIT",
   "scripts": {
     "start": "electron .",
+    "test": "node --test",
     "make-icon": "electron build/make-icon.js",
     "dist": "node build/pack.js clean",
     "dist:mac": "node build/pack.js clean",

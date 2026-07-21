@@ -31,6 +31,8 @@ const CF_SORT_POPULARITY = 2;
 // else stable" — opting into a channel never hides a newer, safer build.
 // Not every provider or addon offers all three; results report what exists.
 const CHANNELS = ["stable", "beta", "alpha"];
+const HTTP_TIMEOUT_MS = 45 * 1000;
+const MAX_JSON_BYTES = 25 * 1024 * 1024;
 
 // ---------------------------------------------------------------- http
 
@@ -39,26 +41,46 @@ const CHANNELS = ["stable", "beta", "alpha"];
 function netJson(url, { method = "GET", headers = {}, body } = {}) {
   return new Promise((resolve, reject) => {
     const req = net.request({ method, url, useSessionCookies: true });
+    let settled = false;
+    const finish = (fn, value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      fn(value);
+    };
+    const timer = setTimeout(() => {
+      try { req.abort(); } catch {}
+      finish(reject, new Error(`Request timed out: ${new URL(url).host}`));
+    }, HTTP_TIMEOUT_MS);
     req.setHeader("accept", "application/json");
     if (body) req.setHeader("content-type", "application/json");
     for (const [k, v] of Object.entries(headers)) req.setHeader(k, v);
     let data = "";
+    let bytes = 0;
     req.on("response", (res) => {
-      res.on("data", (c) => (data += c));
+      res.on("data", (c) => {
+        bytes += Buffer.byteLength(c);
+        if (bytes > MAX_JSON_BYTES) {
+          try { req.abort(); } catch {}
+          finish(reject, new Error(`Response too large from ${new URL(url).host}`));
+          return;
+        }
+        data += c;
+      });
       res.on("end", () => {
         if (res.statusCode < 200 || res.statusCode >= 300) {
           const err = new Error(`HTTP ${res.statusCode} from ${new URL(url).host}`);
           err.status = res.statusCode;
-          return reject(err);
+          return finish(reject, err);
         }
         try {
-          resolve(JSON.parse(data));
+          finish(resolve, JSON.parse(data));
         } catch {
-          reject(new Error(`Non-JSON response from ${new URL(url).host}`));
+          finish(reject, new Error(`Non-JSON response from ${new URL(url).host}`));
         }
       });
     });
-    req.on("error", reject);
+    req.on("error", (err) => finish(reject, err));
     req.end(body ? JSON.stringify(body) : undefined);
   });
 }
@@ -392,7 +414,7 @@ async function checkWago(packages, tokens, addonsDir, channelOf = () => "stable"
     const allFolders = packages.flatMap((p) => p.folders || []);
     const hashes = await fingerprintFolders(addonsDir, allFolders);
     const req = {
-      game_version: "retail",
+      game_version: game,
       addons: Object.entries(hashes).map(([name, hash]) => {
         const owner = packages.find((p) => (p.folders || []).includes(name)) || {};
         const a = { name, hash };
@@ -622,7 +644,12 @@ function isUpToDate(localVersion, remoteVersion) {
   const norm = (v) => String(v).trim().replace(/^v/i, "").toLowerCase();
   const l = norm(localVersion);
   const r = norm(remoteVersion);
-  return l === r || r.includes(l) || l.includes(r);
+  if (l === r) return true;
+  const containsWholeToken = (longer, shorter) => {
+    const escaped = shorter.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`).test(longer);
+  };
+  return containsWholeToken(r, l) || containsWholeToken(l, r);
 }
 
 // Compare two version strings numerically. Returns 1 if remote is newer,
@@ -710,7 +737,7 @@ const PKG_ID_FIELD = {
 async function checkUpdates(packages, settings) {
   const results = { perPackage: {}, errors: [], discoveredWagoIds: {} };
   const wagoTokens = wagoTokensOf(settings);
-  const addonsDir = path.join(settings.wowPath || "", "Interface", "AddOns");
+  const addonsDir = flavors.addonsDirFor(settings.wowPath || "", settings.flavor);
   const byProvider = { curseforge: [], wago: [], wowinterface: [], tukui: [] };
   for (const p of packages) {
     const chosen = effectiveProvider(p, settings);
@@ -1249,7 +1276,10 @@ async function matchProviders(pkg, settings) {
       .then((r) => tryMatch(r.results, "curseforge")).catch(() => {}));
   }
   if (!have.has("wago") && wagoTokensOf(settings).length) {
-    jobs.push(searchWago(pkg.name, wagoTokensOf(settings))
+    // Flavor-scoped like the CurseForge branch above — an unscoped search hits
+    // the retail catalog and can match a retail-only addon by name, which then
+    // persists into settings.matchedIds as a wrong id for this client.
+    jobs.push(searchWago(pkg.name, wagoTokensOf(settings), channelFor(pkg, settings), wagoGameOf(settings))
       .then((r) => tryMatch(r.results, "wago")).catch(() => {}));
   }
   if (!have.has("wowinterface")) {
@@ -1284,4 +1314,5 @@ module.exports = {
   wowiResolveDownload,
   wagoDownloadUrl,
   setWagoRefreshHook,
+  _test: { isUpToDate, compareVersions },
 };

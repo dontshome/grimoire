@@ -142,11 +142,16 @@ function defaultSettings() {
   };
 }
 
+function isSettingsObject(value) {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
 function loadSettings() {
   let s;
   const file = settingsFile();
   try {
     s = JSON.parse(fs.readFileSync(file, "utf8"));
+    if (!isSettingsObject(s)) throw new Error("Settings must be a JSON object");
   } catch {
     // A missing file is normal (first run). A file that EXISTS but won't parse
     // is corruption — preserve a copy so the user's keys are never just lost,
@@ -155,6 +160,7 @@ function loadSettings() {
       preserveCorrupt(file);
       try {
         s = JSON.parse(fs.readFileSync(`${file}.bak`, "utf8"));
+        if (!isSettingsObject(s)) s = null;
       } catch { /* no usable backup */ }
     }
     if (!s) s = defaultSettings();
@@ -213,6 +219,7 @@ function readUserKeys() {
 }
 
 function saveSettings(s) {
+  if (!isSettingsObject(s)) throw new Error("Invalid settings");
   const copy = { ...s };
   delete copy.wagoPublicToken;
   delete copy.bundledActive;

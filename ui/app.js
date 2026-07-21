@@ -198,7 +198,10 @@ function renderCategories() {
     const b = document.createElement("button");
     b.className = "side-item" + (state.category === value ? " active" : "");
     b.dataset.category = value;
-    b.innerHTML = `${label} <span class="count">${count ?? ""}</span>`;
+    const countEl = document.createElement("span");
+    countEl.className = "count";
+    countEl.textContent = count ?? "";
+    b.append(document.createTextNode(`${label} `), countEl);
     b.addEventListener("click", () => {
       state.category = value;
       render();
@@ -342,7 +345,9 @@ function renderList() {
       const shown = pkg.installedVia || pkg.provider;
       const badge = document.createElement("span");
       badge.className = "badge";
-      badge.innerHTML = `<span class="dot ${PROVIDER_DOT[shown] || "dot-unk"}"></span>${PROVIDER_LABEL[shown] || shown}`;
+      const dot = document.createElement("span");
+      dot.className = `dot ${PROVIDER_DOT[shown] || "dot-unk"}`;
+      badge.append(dot, document.createTextNode(PROVIDER_LABEL[shown] || shown));
       if (pkg.installedVia) badge.title = `Installed via ${PROVIDER_LABEL[pkg.installedVia]}`;
       prov.appendChild(badge);
     }
@@ -409,7 +414,14 @@ function render() {
 
 async function scan() {
   setStatus("Scanning AddOns folder…");
-  const res = await window.grimoire.scanAddons();
+  let res;
+  try {
+    res = await window.grimoire.scanAddons();
+  } catch (err) {
+    toast(`Scan failed: ${err.message || err}`, "error");
+    setStatus("Scan failed.");
+    return;
+  }
   if (res.error === "noWowPath" || res.error === "badWowPath") {
     state.packages = [];
     if (res.flavors) renderFlavorSwitcher(res.flavors, res.flavor);
@@ -1014,14 +1026,20 @@ function renderBrowseResults() {
     if (entries.length > 1) {
       const badge = document.createElement("span");
       badge.className = "badge";
-      badge.innerHTML = entries.map((e) => `<span class="dot ${PROVIDER_DOT[e.provider]}"></span>`).join("");
+      for (const entry of entries) {
+        const dot = document.createElement("span");
+        dot.className = `dot ${PROVIDER_DOT[entry.provider] || "dot-unk"}`;
+        badge.appendChild(dot);
+      }
       badge.append(` ${entries.length} providers`);
       badge.title = "Available from: " + entries.map((e) => PROVIDER_LABEL[e.provider]).join(", ") + " — click the row to pick one.";
       prov.appendChild(badge);
     } else {
       const badge = document.createElement("span");
       badge.className = "badge";
-      badge.innerHTML = `<span class="dot ${PROVIDER_DOT[r.provider]}"></span>${PROVIDER_LABEL[r.provider]}`;
+      const dot = document.createElement("span");
+      dot.className = `dot ${PROVIDER_DOT[r.provider] || "dot-unk"}`;
+      badge.append(dot, document.createTextNode(PROVIDER_LABEL[r.provider] || r.provider));
       prov.appendChild(badge);
     }
 
@@ -1338,7 +1356,7 @@ async function boot() {
   window.grimoire.onUpdateReady((version) => {
     const t = document.createElement("div");
     t.className = "toast ok";
-    t.innerHTML = `Grimoire ${version} is ready. `;
+    t.textContent = `Grimoire ${version} is ready. `;
     const btn = document.createElement("button");
     btn.className = "btn-update";
     btn.textContent = "Restart to update";
