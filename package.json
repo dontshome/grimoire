@@ -1,7 +1,7 @@
 {
   "name": "grimoire",
   "productName": "Grimoire",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "World of Warcraft addon manager — CurseForge and Wago in one place",
   "main": "main.js",
   "author": "dontshome",
@@ -21,7 +21,7 @@
   },
   "devDependencies": {
     "electron": "^43.1.1",
-    "electron-builder": "^25.1.8"
+    "electron-builder": "^26.15.3"
   },
   "build": {
     "appId": "com.dontshome.grimoire",

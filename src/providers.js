@@ -203,7 +203,32 @@ function cfModToResult(mod, channel = "stable", gvType = RETAIL_GAME_VERSION_TYP
 }
 
 async function cfOfficial(pathname, apiKey, opts = {}) {
-  return netJson(`${CF_API}${pathname}`, { ...opts, headers: { "x-api-key": apiKey } });
+  try {
+    return await netJson(`${CF_API}${pathname}`, {
+      ...opts,
+      headers: { ...(opts.headers || {}), "x-api-key": String(apiKey || "").trim() },
+    });
+  } catch (err) {
+    if (err && (err.status === 401 || err.status === 403)) {
+      const authError = new Error(
+        `CurseForge rejected the API key (HTTP ${err.status}). Confirm the key and its application are approved and active in console.curseforge.com.`
+      );
+      authError.status = err.status;
+      authError.code = "CURSEFORGE_AUTH_REJECTED";
+      throw authError;
+    }
+    throw err;
+  }
+}
+
+// Use a small authenticated endpoint to verify credentials. A syntactically
+// plausible key can still be pending, disabled, or revoked, so format checks
+// alone cannot predict whether CurseForge will accept it.
+async function validateCurseApiKey(apiKey) {
+  const key = String(apiKey || "").trim();
+  if (!key) throw new Error("Enter a CurseForge API key first.");
+  await cfOfficial(`/games/${CF_GAME_WOW}`, key);
+  return true;
 }
 
 // All check* functions return maps keyed by package key.
@@ -1311,6 +1336,7 @@ module.exports = {
   resolveInstall,
   matchProviders,
   cfCategories,
+  validateCurseApiKey,
   wowiResolveDownload,
   wagoDownloadUrl,
   setWagoRefreshHook,

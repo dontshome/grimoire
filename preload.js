@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer } = require("electron");
 contextBridge.exposeInMainWorld("grimoire", {
   getSettings: () => ipcRenderer.invoke("settings:get"),
   saveSettings: (s) => ipcRenderer.invoke("settings:save", s),
+  validateCurseKey: (apiKey) => ipcRenderer.invoke("settings:validateCurseKey", apiKey),
   pickFolder: () => ipcRenderer.invoke("dialog:pickFolder"),
   openExternal: (url) => ipcRenderer.invoke("shell:open", url),
   scanAddons: () => ipcRenderer.invoke("addons:scan"),

@@ -143,22 +143,26 @@
   <div id="modal" class="modal-backdrop hidden">
     <div class="modal">
       <h2>Settings</h2>
-      <label class="field">
+      <div class="field">
         <span>World of Warcraft folder <em>— the main folder containing _retail_, _classic_era_, etc.</em></span>
         <div class="field-row">
           <input id="set-wowpath" type="text" spellcheck="false" />
           <button id="btn-browse" class="btn">Browse…</button>
         </div>
-      </label>
-      <label class="field">
+      </div>
+      <div class="field">
         <span>CurseForge API key <em>— powers CurseForge search, logos and categories</em></span>
         <input id="set-cfkey" type="password" spellcheck="false" placeholder="from console.curseforge.com" />
+        <span id="cfkey-status" class="field-hint"></span>
+        <label id="cfkey-remove-row" class="field-hint hidden"><input id="set-cfkey-remove" type="checkbox" /> Remove my saved CurseForge key</label>
         <span id="bundled-note" class="field-hint hidden">✓ This build already includes working keys — leave blank unless you want to use your own.</span>
-      </label>
-      <label class="field">
+      </div>
+      <div class="field">
         <span>Wago token <em>— optional; the ad panel connects Wago for free. Patreon supporters can paste their token from addons.wago.io/patreon for ad-free access</em></span>
         <input id="set-wagokey" type="password" spellcheck="false" placeholder="optional — ad panel handles this automatically" />
-      </label>
+        <span id="wagokey-status" class="field-hint"></span>
+        <label id="wagokey-remove-row" class="field-hint hidden"><input id="set-wagokey-remove" type="checkbox" /> Remove my saved Wago token</label>
+      </div>
       <label class="field">
         <span>Default release channel <em>— applies where an addon offers it; per-addon overrides live in each addon's detail panel</em></span>
         <select id="set-channel">

@@ -1237,26 +1237,78 @@ function setWagoConnected() {
 function openSettings() {
   const s = state.settings || {};
   $("#set-wowpath").value = s.wowPath || "";
-  $("#set-cfkey").value = s.curseApiKey || "";
-  $("#set-wagokey").value = s.wagoApiKey || "";
+  $("#set-cfkey").value = "";
+  $("#set-cfkey").placeholder = s.curseKeyConfigured
+    ? "Saved securely — enter a replacement or leave blank"
+    : "from console.curseforge.com";
+  $("#cfkey-status").textContent = s.curseKeyConfigured ? "✓ A CurseForge key is saved securely." : "";
+  $("#cfkey-remove-row").classList.toggle("hidden", !s.curseUserKeyConfigured);
+  $("#set-cfkey-remove").checked = false;
+  $("#set-wagokey").value = "";
+  $("#set-wagokey").placeholder = s.wagoUserKeyConfigured
+    ? "Saved securely — enter a replacement or leave blank"
+    : "optional — ad panel handles this automatically";
+  $("#wagokey-status").textContent = s.wagoUserKeyConfigured ? "✓ A Wago token is saved securely." : "";
+  $("#wagokey-remove-row").classList.toggle("hidden", !s.wagoUserKeyConfigured);
+  $("#set-wagokey-remove").checked = false;
   $("#set-channel").value = s.releaseChannel || "stable";
   const bundled = $("#bundled-note");
   if (bundled) bundled.classList.toggle("hidden", !s.bundledActive);
   $("#modal").classList.remove("hidden");
+  if (s.curseKeyConfigured) {
+    $("#cfkey-status").textContent = "Testing the saved CurseForge key…";
+    window.grimoire.validateCurseKey().then((result) => {
+      $("#cfkey-status").textContent = result.valid
+        ? "✓ Saved CurseForge key is active."
+        : result.message;
+    }).catch((err) => {
+      $("#cfkey-status").textContent = `Could not test the saved key: ${err.message || err}`;
+    });
+  }
 }
 
 async function saveSettingsFromModal() {
-  state.settings = await window.grimoire.saveSettings({
+  const button = $("#btn-modal-save");
+  const curseApiKey = $("#set-cfkey").value.trim();
+  const wagoApiKey = $("#set-wagokey").value.trim();
+  const patch = {
     ...state.settings,
     wowPath: $("#set-wowpath").value.trim(),
-    curseApiKey: $("#set-cfkey").value.trim(),
-    wagoApiKey: $("#set-wagokey").value.trim(),
     releaseChannel: $("#set-channel").value,
-  });
-  $("#modal").classList.add("hidden");
-  toast("Settings saved.", "ok");
-  if (!state.categories.length) loadBrowseCategories();
-  await scan();
+  };
+  if ($("#set-cfkey-remove").checked) patch.curseApiKey = "";
+  else if (curseApiKey) patch.curseApiKey = curseApiKey;
+  if ($("#set-wagokey-remove").checked) patch.wagoApiKey = "";
+  else if (wagoApiKey) patch.wagoApiKey = wagoApiKey;
+
+  button.disabled = true;
+  button.textContent = "Saving…";
+  try {
+    // Persist first. A newly generated CurseForge key may still be awaiting
+    // activation; a failed live check must not silently discard what the user
+    // entered and make it look like storage is broken.
+    state.settings = await window.grimoire.saveSettings(patch);
+    if (curseApiKey && !$("#set-cfkey-remove").checked) {
+      button.textContent = "Testing key…";
+      const result = await window.grimoire.validateCurseKey();
+      if (!result.valid) {
+        $("#cfkey-status").textContent = `Saved securely, but ${result.message}`;
+        toast("CurseForge key was saved, but CurseForge is still rejecting it. Check its approval/activation status.", "error");
+        return;
+      }
+    }
+    $("#modal").classList.add("hidden");
+    toast("Settings saved.", "ok");
+    if (!state.categories.length) loadBrowseCategories();
+    await scan();
+  } catch (err) {
+    const message = err.message || String(err);
+    $("#cfkey-status").textContent = `Could not save or test the key: ${message}`;
+    toast(`Settings not saved: ${message}`, "error");
+  } finally {
+    button.disabled = false;
+    button.textContent = "Save";
+  }
 }
 
 // ---------------------------------------------------------------- wiring

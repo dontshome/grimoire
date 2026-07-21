@@ -47,7 +47,9 @@ function readSecrets(raw) {
   const out = {};
   for (const f of SECRET_FIELDS) {
     const enc = raw[`${f}Enc`];
-    out[f] = enc ? decryptSecret(enc) : (raw[f] || "");
+    // If an interrupted migration left both forms behind, a damaged encrypted
+    // value must not hide the still-recoverable legacy plaintext value.
+    out[f] = (enc ? decryptSecret(enc) : "") || raw[f] || "";
   }
   return out;
 }
@@ -200,8 +202,14 @@ function loadSettings() {
 // otherwise a bundled key would appear as if they'd entered it.
 function userVisibleSettings() {
   const s = loadSettings();
-  if (!readUserKeys().curseApiKey) s.curseApiKey = "";
-  if (!readUserKeys().wagoApiKey) s.wagoApiKey = "";
+  const userKeys = readUserKeys();
+  // Credentials stay in the trusted main process. The renderer only needs to
+  // know whether a value exists; edits arrive as an explicit settings patch.
+  delete s.curseApiKey;
+  delete s.wagoApiKey;
+  s.curseKeyConfigured = !!(userKeys.curseApiKey || bundledKeys.curseApiKey);
+  s.curseUserKeyConfigured = !!userKeys.curseApiKey;
+  s.wagoUserKeyConfigured = !!userKeys.wagoApiKey;
   s.bundledActive = !!(bundledKeys.curseApiKey || bundledKeys.wagoApiKey);
   // Whether a working Wago token already exists (user's own or bundled). When
   // true, the renderer skips the Wago ad webview entirely — it's only needed
@@ -221,27 +229,52 @@ function readUserKeys() {
 function saveSettings(s) {
   if (!isSettingsObject(s)) throw new Error("Invalid settings");
   const copy = { ...s };
+  const suppliedSecrets = {};
+  for (const f of SECRET_FIELDS) {
+    if (Object.prototype.hasOwnProperty.call(copy, f)) {
+      suppliedSecrets[f] = String(copy[f] || "").trim();
+    }
+  }
   delete copy.wagoPublicToken;
   delete copy.bundledActive;
+  delete copy.curseKeyConfigured;
+  delete copy.curseUserKeyConfigured;
   delete copy.wagoKeyConfigured;
+  delete copy.wagoUserKeyConfigured;
   // Never persist bundled keys into settings.json — they belong to the build,
   // not the user, and are re-read from bundled.dat every launch. (Internal
   // callers pass a merged settings object that may carry them.)
   if (copy.curseApiKey && copy.curseApiKey === bundledKeys.curseApiKey) copy.curseApiKey = "";
   if (copy.wagoApiKey && copy.wagoApiKey === bundledKeys.wagoApiKey) copy.wagoApiKey = "";
+  if (suppliedSecrets.curseApiKey && suppliedSecrets.curseApiKey === bundledKeys.curseApiKey) {
+    delete suppliedSecrets.curseApiKey;
+  }
+  if (suppliedSecrets.wagoApiKey && suppliedSecrets.wagoApiKey === bundledKeys.wagoApiKey) {
+    delete suppliedSecrets.wagoApiKey;
+  }
 
   // Credentials are encrypted at rest, so the plaintext field never reaches
   // disk. If the platform has no keyring we fall back to plaintext rather than
   // silently dropping the user's keys — a broken app is worse than this file
   // being no worse than it was before.
+  let existing = {};
+  try { existing = JSON.parse(fs.readFileSync(settingsFile(), "utf8")); } catch {}
   for (const f of SECRET_FIELDS) {
-    const plain = copy[f];
+    const explicitlySupplied = Object.prototype.hasOwnProperty.call(suppliedSecrets, f);
+    const plain = explicitlySupplied ? suppliedSecrets[f] : "";
     delete copy[f];
     delete copy[`${f}Enc`];
-    if (!plain) continue;
-    const enc = encryptSecret(plain);
-    if (enc) copy[`${f}Enc`] = enc;
-    else copy[f] = plain;
+    if (explicitlySupplied) {
+      if (!plain) continue; // explicit empty value removes the saved secret
+      const enc = encryptSecret(plain);
+      if (enc) copy[`${f}Enc`] = enc;
+      else copy[f] = plain;
+    } else if (existing[`${f}Enc`]) {
+      // Unrelated settings changes preserve the ciphertext byte-for-byte.
+      copy[`${f}Enc`] = existing[`${f}Enc`];
+    } else if (existing[f]) {
+      copy[f] = existing[f];
+    }
   }
 
   const file = settingsFile();
@@ -416,6 +449,24 @@ ipcMain.handle("settings:get", () => userVisibleSettings());
 ipcMain.handle("settings:save", (_e, s) => {
   saveSettings(s);
   return userVisibleSettings();
+});
+
+ipcMain.handle("settings:validateCurseKey", async (_e, apiKey) => {
+  const key = typeof apiKey === "string" ? apiKey : loadSettings().curseApiKey;
+  try {
+    await providers.validateCurseApiKey(key);
+    return { valid: true };
+  } catch (err) {
+    // Invalid credentials are an expected validation result, not an IPC
+    // handler failure. Returning structured data avoids Electron dumping a
+    // scary main-process stack trace for a normal 401/403 response.
+    return {
+      valid: false,
+      status: err && err.status,
+      code: err && err.code,
+      message: (err && err.message) || String(err),
+    };
+  }
 });
 
 ipcMain.handle("dialog:pickFolder", async () => {

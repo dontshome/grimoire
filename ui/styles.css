@@ -498,6 +498,7 @@ input:focus { border-color: var(--gold); box-shadow: 0 0 0 3px rgba(200, 162, 74
 .field > span { display: block; font-size: 12.5px; color: var(--text-dim); margin-bottom: 6px; }
 .field em { color: var(--text-faint); font-style: normal; }
 .field input { width: 100%; }
+.field .field-hint input[type="checkbox"] { width: auto; margin-right: 5px; vertical-align: middle; }
 .field-row { display: flex; gap: 8px; }
 .field-row input { flex: 1; }
 
