@@ -1416,6 +1416,19 @@ async function boot() {
     t.appendChild(btn);
     $("#toasts").appendChild(t); // persists (no auto-dismiss) so it isn't missed
   });
+  // macOS: the app can't install its own updates while unsigned, so point the
+  // user at the download instead of staying silent.
+  window.grimoire.onUpdateAvailable((info) => {
+    const t = document.createElement("div");
+    t.className = "toast ok";
+    t.textContent = `Grimoire ${info.version} is available. `;
+    const btn = document.createElement("button");
+    btn.className = "btn-update";
+    btn.textContent = "Download ↗";
+    btn.addEventListener("click", () => window.grimoire.openExternal(info.url));
+    t.appendChild(btn);
+    $("#toasts").appendChild(t); // persists, same as the Windows update prompt
+  });
   await scan();
 }
 

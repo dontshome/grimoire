@@ -19,5 +19,7 @@ contextBridge.exposeInMainWorld("grimoire", {
   onWagoConnected: (cb) => ipcRenderer.on("wago:connected", () => cb()),
   onWagoRefresh: (cb) => ipcRenderer.on("wago:refresh", () => cb()),
   onUpdateReady: (cb) => ipcRenderer.on("app:update-ready", (_e, v) => cb(v)),
+  // macOS only: a newer release exists but cannot be installed automatically.
+  onUpdateAvailable: (cb) => ipcRenderer.on("app:update-available", (_e, info) => cb(info)),
   installUpdateNow: () => ipcRenderer.invoke("app:install-update"),
 });

@@ -338,20 +338,77 @@ app.whenReady().then(() => {
   // bundled keys) must NOT pull the public release — that would replace it
   // with the keyless build and wipe the embedded keys.
   const isBundledBuild = !!(bundledKeys.curseApiKey || bundledKeys.wagoApiKey);
-  if (autoUpdater && app.isPackaged && !isBundledBuild) {
-    autoUpdater.autoDownload = true;
-    autoUpdater.on("update-downloaded", (info) => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send("app:update-ready", info.version);
-      }
-    });
-    autoUpdater.checkForUpdates().catch(() => {});
+  if (app.isPackaged && !isBundledBuild) {
+    // macOS cannot self-update here: Squirrel.Mac verifies the running app's
+    // code signature before applying an update, and this build is unsigned (no
+    // Apple Developer account). autoUpdater used to be called on macOS too,
+    // where it failed into a .catch() and the user was told nothing at all.
+    if (process.platform === "darwin") {
+      checkForNewerRelease();
+    } else if (autoUpdater) {
+      autoUpdater.autoDownload = true;
+      autoUpdater.on("update-downloaded", (info) => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send("app:update-ready", info.version);
+        }
+      });
+      autoUpdater.checkForUpdates().catch(() => {});
+    }
   }
 });
 
 ipcMain.handle("app:install-update", () => {
   if (autoUpdater) autoUpdater.quitAndInstall();
 });
+
+// ------------------------------------------------------- notify-only updates
+
+// Used on macOS in place of a real auto-update (see the whenReady comment).
+// Hard-coded rather than read from package.json's publish config, because
+// electron-builder rewrites package.json when packaging and the build field
+// is not guaranteed to survive.
+const GITHUB_REPO = "dontshome/grimoire";
+const UPDATE_CHECK_TIMEOUT_MS = 15 * 1000;
+
+// True when `remote` is strictly newer. Compares dotted numeric components,
+// treating a missing component as 0 so 0.2 beats 0.1.9.
+function isNewerVersion(remote, current) {
+  const parse = (v) => String(v).replace(/^v/i, "").split(/[.\-+]/).map((n) => parseInt(n, 10));
+  const a = parse(remote);
+  const b = parse(current);
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    const x = Number.isFinite(a[i]) ? a[i] : 0;
+    const y = Number.isFinite(b[i]) ? b[i] : 0;
+    if (x !== y) return x > y;
+  }
+  return false;
+}
+
+async function checkForNewerRelease() {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), UPDATE_CHECK_TIMEOUT_MS);
+  try {
+    const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`, {
+      headers: { accept: "application/vnd.github+json" },
+      signal: controller.signal,
+    });
+    if (!res.ok) return;
+    const release = await res.json();
+    const latest = String(release.tag_name || "").replace(/^v/i, "");
+    if (!latest || !isNewerVersion(latest, app.getVersion())) return;
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("app:update-available", {
+        version: latest,
+        url: release.html_url || `https://github.com/${GITHUB_REPO}/releases/latest`,
+      });
+    }
+  } catch {
+    // Offline, rate-limited, or GitHub is down. An update check failing is not
+    // worth interrupting the user over.
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
