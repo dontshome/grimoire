@@ -1,0 +1,71 @@
+{
+  "name": "grimoire",
+  "productName": "Grimoire",
+  "version": "0.1.0",
+  "description": "World of Warcraft addon manager — CurseForge and Wago in one place",
+  "main": "main.js",
+  "author": "dontshome",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "make-icon": "electron build/make-icon.js",
+    "dist": "node build/pack.js clean",
+    "dist:dad": "node build/pack.js dad",
+    "dist:both": "node build/pack.js both"
+  },
+  "dependencies": {
+    "adm-zip": "^0.6.0",
+    "electron-updater": "^6.8.9"
+  },
+  "devDependencies": {
+    "electron": "^43.1.1",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.dontshome.grimoire",
+    "productName": "Grimoire",
+    "artifactName": "${productName}-Setup-${version}.${ext}",
+    "files": [
+      "main.js",
+      "preload.js",
+      "wago-ad-preload.js",
+      "src/**/*",
+      "ui/**/*",
+      "build/icon.ico",
+      "bundled.dat"
+    ],
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "dontshome",
+        "repo": "grimoire"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Grimoire",
+      "installerHeaderIcon": "build/icon.ico",
+      "uninstallDisplayName": "Grimoire ${version}"
+    }
+  }
+}

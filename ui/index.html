@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; style-src 'self'; img-src 'self' https: data:; script-src 'self'; frame-src https:" />
+  <title>Grimoire</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-rune">✦</div>
+      <div>
+        <h1>Grimoire</h1>
+        <span class="tagline">your addon spellbook</span>
+      </div>
+    </div>
+    <nav class="tabs">
+      <button id="tab-installed" class="tab active">Installed</button>
+      <button id="tab-browse" class="tab">Browse</button>
+    </nav>
+    <input id="search" class="search" type="search" placeholder="Search installed addons…" />
+    <div class="topbar-actions">
+      <button id="btn-check" class="btn btn-gold" title="Check all providers for newer versions">Check for updates</button>
+      <button id="btn-rescan" class="btn" title="Rescan the AddOns folder">⟳ Rescan</button>
+      <button id="btn-settings" class="btn btn-icon" title="Settings">⚙</button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-scroll">
+        <section class="side-group">
+          <h2>Filter</h2>
+          <nav id="filter-status" class="side-list">
+            <button class="side-item active" data-status="all">All addons <span class="count" id="count-all"></span></button>
+            <button class="side-item" data-status="updates">Updates available <span class="count count-hot" id="count-updates"></span></button>
+          <button class="side-item" data-status="attention" title="Removed from a provider, abandoned, or much fresher elsewhere">Needs attention <span class="count count-hot" id="count-attention"></span></button>
+          </nav>
+        </section>
+        <section class="side-group">
+          <h2>Provider</h2>
+          <nav id="filter-provider" class="side-list">
+            <button class="side-item active" data-provider="all">All providers</button>
+            <button class="side-item" data-provider="curseforge"><span class="dot dot-cf"></span>CurseForge</button>
+            <button class="side-item" data-provider="wago"><span class="dot dot-wago"></span>Wago</button>
+            <button class="side-item" data-provider="wowinterface"><span class="dot dot-wowi"></span>WoWInterface</button>
+            <button class="side-item" data-provider="tukui"><span class="dot dot-tukui"></span>Tukui</button>
+            <button class="side-item" data-provider="multi"><span class="dot dot-both"></span>Multiple</button>
+            <button class="side-item" data-provider="unknown"><span class="dot dot-unk"></span>Unmanaged</button>
+          </nav>
+        </section>
+        <section class="side-group">
+          <h2>Category</h2>
+          <nav id="filter-category" class="side-list side-list-scroll"></nav>
+        </section>
+      </div>
+      <section class="ad-group" id="wago-ad-group">
+        <h2>Wago <span id="wago-status" class="wago-status">connecting…</span></h2>
+        <div class="ad-frame" id="wago-ad-frame"></div>
+        <p class="ad-note" title="Wago grants free API access to apps that show this ad — the same arrangement WowUp has. Your own Wago token in Settings works too.">ⓘ this ad = free Wago API access</p>
+      </section>
+    </aside>
+
+    <main class="content" id="view-installed">
+      <div class="list-head">
+        <button class="col col-name sortable" data-sort="name">Addon <span class="arrow"></span></button>
+        <button class="col col-version sortable" data-sort="version">Installed <span class="arrow"></span></button>
+        <button class="col col-latest">Latest</button>
+        <button class="col col-gamever sortable" data-sort="gamever">Game <span class="arrow"></span></button>
+        <button class="col col-provider sortable" data-sort="provider">Provider <span class="arrow"></span></button>
+        <button class="col col-category sortable" data-sort="category">Category <span class="arrow"></span></button>
+        <button class="col col-action"></button>
+      </div>
+      <div id="addon-list" class="addon-list"></div>
+      <div id="empty-state" class="empty-state hidden">
+        <div class="empty-rune">✦</div>
+        <p id="empty-text">No addons found.</p>
+      </div>
+    </main>
+
+    <main class="content hidden" id="view-browse">
+      <div class="browse-bar">
+        <input id="browse-query" type="search" placeholder="Search CurseForge, Wago, WoWInterface and Tukui — empty shows popular addons" />
+        <select id="browse-category" class="browse-select" title="Filter by category">
+          <option value="">All categories</option>
+        </select>
+        <select id="browse-flavor" class="browse-select" title="Filter by game version">
+          <option value="">Any game version</option>
+          <option value="Retail">Retail</option>
+          <option value="MoP">MoP Classic</option>
+          <option value="Cata">Cata Classic</option>
+          <option value="Wrath">Wrath Classic</option>
+          <option value="TBC">TBC Classic</option>
+          <option value="Era">Classic Era</option>
+        </select>
+        <button id="btn-browse-search" class="btn btn-gold">Search</button>
+      </div>
+      <div id="browse-results" class="addon-list"></div>
+      <div class="browse-more hidden" id="browse-more-wrap">
+        <button id="btn-browse-more" class="btn">Show more results</button>
+      </div>
+      <div id="browse-empty" class="empty-state">
+        <div class="empty-rune">⌕</div>
+        <p id="browse-empty-text">Search all providers, or leave empty to see what's popular.</p>
+      </div>
+    </main>
+  </div>
+
+  <footer class="statusbar">
+    <span id="status-left">Ready.</span>
+    <span id="status-right"></span>
+  </footer>
+
+  <!-- Addon detail drawer -->
+  <div id="detail-backdrop" class="detail-backdrop hidden">
+    <aside class="detail" id="detail-panel">
+      <button id="detail-close" class="detail-close" title="Close">✕</button>
+      <div class="detail-head">
+        <div class="addon-icon detail-icon" id="detail-icon"></div>
+        <div>
+          <h2 id="detail-name"></h2>
+          <p class="detail-author" id="detail-author"></p>
+        </div>
+      </div>
+      <p class="detail-summary" id="detail-summary"></p>
+      <div class="detail-grid" id="detail-grid"></div>
+      <div class="detail-section" id="detail-providers-section">
+        <h3>Providers</h3>
+        <div id="detail-providers"></div>
+      </div>
+      <div class="detail-section" id="detail-folders-section">
+        <h3>Folders</h3>
+        <div class="detail-folders" id="detail-folders"></div>
+      </div>
+      <div class="detail-actions" id="detail-actions"></div>
+    </aside>
+  </div>
+
+  <!-- Settings modal -->
+  <div id="modal" class="modal-backdrop hidden">
+    <div class="modal">
+      <h2>Settings</h2>
+      <label class="field">
+        <span>World of Warcraft folder <em>(_retail_)</em></span>
+        <div class="field-row">
+          <input id="set-wowpath" type="text" spellcheck="false" />
+          <button id="btn-browse" class="btn">Browse…</button>
+        </div>
+      </label>
+      <label class="field">
+        <span>CurseForge API key <em>— powers CurseForge search, logos and categories</em></span>
+        <input id="set-cfkey" type="password" spellcheck="false" placeholder="from console.curseforge.com" />
+        <span id="bundled-note" class="field-hint hidden">✓ This build already includes working keys — leave blank unless you want to use your own.</span>
+      </label>
+      <label class="field">
+        <span>Wago token <em>— optional; the ad panel connects Wago for free. Patreon supporters can paste their token from addons.wago.io/patreon for ad-free access</em></span>
+        <input id="set-wagokey" type="password" spellcheck="false" placeholder="optional — ad panel handles this automatically" />
+      </label>
+      <label class="field">
+        <span>Default release channel <em>— applies where an addon offers it; per-addon overrides live in each addon's detail panel</em></span>
+        <select id="set-channel">
+          <option value="stable">Stable only — released builds</option>
+          <option value="beta">Beta — include beta builds when newer</option>
+          <option value="alpha">Alpha — include alpha builds when newer</option>
+        </select>
+        <span class="field-hint">CurseForge and Wago publish beta/alpha builds; WoWInterface and Tukui have a single release stream.</span>
+      </label>
+      <div class="modal-actions">
+        <button id="btn-modal-cancel" class="btn">Cancel</button>
+        <button id="btn-modal-save" class="btn btn-gold">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toasts" class="toasts"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
