@@ -68,6 +68,10 @@ function userVisibleSettings() {
   if (!readUserKeys().curseApiKey) s.curseApiKey = "";
   if (!readUserKeys().wagoApiKey) s.wagoApiKey = "";
   s.bundledActive = !!(bundledKeys.curseApiKey || bundledKeys.wagoApiKey);
+  // Whether a working Wago token already exists (user's own or bundled). When
+  // true, the renderer skips the Wago ad webview entirely — it's only needed
+  // to fetch a free token for users who have none.
+  s.wagoKeyConfigured = !!loadSettings().wagoApiKey;
   return s;
 }
 
@@ -257,7 +261,11 @@ ipcMain.handle("shell:open", (_e, url) => {
 });
 
 ipcMain.handle("wago:adPreloadPath", () => {
-  return "file://" + path.join(__dirname, "wago-ad-preload.js").replace(/\\/g, "/");
+  // A <webview> preload must be a real file on disk — Electron won't load one
+  // from inside app.asar. The build unpacks it (asarUnpack), so point at the
+  // unpacked copy when running packaged.
+  const dir = __dirname.replace(/app\.asar([\\/]|$)/, "app.asar.unpacked$1");
+  return "file://" + path.join(dir, "wago-ad-preload.js").replace(/\\/g, "/");
 });
 
 ipcMain.handle("wago:status", () => ({ connected: !!wagoPublicToken }));

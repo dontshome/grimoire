@@ -1113,6 +1113,19 @@ function refreshWagoAd() {
 }
 
 async function initWagoAd() {
+  // A Wago key is already configured (the user's own, or bundled into this
+  // build) — Wago works without the ad panel, so don't run a live third-party
+  // ad webview at all. This keeps the app lean and avoids the ad being the
+  // one unpredictable, focus-grabbing element in the window.
+  if (state.settings.wagoKeyConfigured) {
+    const pill = $("#wago-status");
+    pill.textContent = "connected ✓";
+    pill.classList.add("ok");
+    const group = $("#wago-ad-group");
+    if (group) group.classList.add("hidden");
+    state.wagoConnected = true;
+    return;
+  }
   try {
     const status = await window.grimoire.wagoStatus();
     if (status.connected) setWagoConnected();
@@ -1126,7 +1139,8 @@ async function initWagoAd() {
       "useragent",
       "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/61.0.3163.100 Safari/537.36"
     );
-    wv.setAttribute("allowpopups", "");
+    // No popups — ad pages have no legitimate reason to open windows in-app,
+    // and pop-unders can steal focus from the main window.
     wv.setAttribute("partition", "persist:wagoad");
     $("#wago-ad-frame").appendChild(wv);
   } catch {
