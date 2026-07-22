@@ -1,7 +1,7 @@
 {
   "name": "grimoire",
   "productName": "Grimoire",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "World of Warcraft addon manager — CurseForge and Wago in one place",
   "main": "main.js",
   "author": "dontshome",
