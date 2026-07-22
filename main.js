@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain, dialog, shell, safeStorage } = require("electron");
 const path = require("path");
 const fs = require("fs");
+const os = require("os");
 
 const scanner = require("./src/scanner");
 const providers = require("./src/providers");
@@ -85,13 +86,22 @@ function migrateSecretsAtRest() {
 
 // Probed in order; paths for the other platform simply never exist, so the
 // list can stay flat rather than branching on process.platform.
+// The Linux entries are Wine prefixes — Battle.net has no native Linux
+// client, so WoW always lands under drive_c inside one. Paths cover Lutris's
+// official Battle.net installer (~/Games/battlenet, the common case) and a
+// plain default Wine prefix; a Proton prefix under Steam's compatdata isn't
+// probed here since its folder name is a per-install numeric app id, not
+// something guessable.
 const DEFAULT_WOW_ROOTS = [
   "C:\\Program Files (x86)\\World of Warcraft",
   "C:\\Program Files\\World of Warcraft",
   "D:\\World of Warcraft",
   "D:\\Games\\World of Warcraft",
   "/Applications/World of Warcraft",
-  path.join(require("os").homedir(), "Applications", "World of Warcraft"),
+  path.join(os.homedir(), "Applications", "World of Warcraft"),
+  path.join(os.homedir(), "Games", "battlenet", "drive_c", "Program Files (x86)", "World of Warcraft"),
+  path.join(os.homedir(), "Games", "battle-net", "drive_c", "Program Files (x86)", "World of Warcraft"),
+  path.join(os.homedir(), ".wine", "drive_c", "Program Files (x86)", "World of Warcraft"),
 ];
 
 // wowPath is the WoW *root*, which holds every client folder (_retail_,
