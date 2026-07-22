@@ -27,10 +27,12 @@ A World of Warcraft addon manager that handles **CurseForge, Wago, WoWInterface,
 ```sh
 npm install
 npm start          # run in development
-npm run dist       # build the Windows installer → dist/
+npm run dist       # build the installer for your OS → dist/
 ```
 
-The installer is unsigned, so Windows SmartScreen will warn on first run — choose **More info → Run anyway**.
+`npm run dist` builds whatever electron-builder can produce for the host platform: an NSIS installer on Windows, a dmg/zip on macOS, and an AppImage on Linux.
+
+The Windows installer is unsigned, so SmartScreen will warn on first run — choose **More info → Run anyway**. The Linux AppImage just needs `chmod +x` before running.
 
 ## How it talks to each provider
 

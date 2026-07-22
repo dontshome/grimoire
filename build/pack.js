@@ -149,11 +149,14 @@ function authorKeys() {
 
 // suffix is "" for the public build and "-dad" for the keyed one. Each platform
 // names its own artifact — electron-builder can only build the host's format,
-// so running this on macOS produces the dmg/zip and on Windows the nsis exe.
+// so running this on macOS produces the dmg/zip, on Linux the AppImage, and on
+// Windows the nsis exe.
 function runBuilder(suffix) {
   const args = [builderCli];
   if (process.platform === "darwin") {
     args.push("--mac", "-c.mac.artifactName", `\${productName}-\${version}-mac-\${arch}${suffix}.\${ext}`);
+  } else if (process.platform === "linux") {
+    args.push("--linux", "AppImage", "-c.linux.artifactName", `\${productName}-\${version}-linux-\${arch}${suffix}.\${ext}`);
   } else {
     args.push("--win", "nsis", "-c.nsis.artifactName", `Grimoire-Setup-\${version}${suffix}.exe`);
   }
@@ -194,7 +197,7 @@ try {
   // ends up referencing the public installer, not the private dad one.
   else { buildDad(); buildClean(); }
   console.log("\nDone. Installers are in:", OUT);
-  const artifacts = /\.(exe|dmg|zip)$/i;
+  const artifacts = /\.(exe|dmg|zip|AppImage)$/i;
   for (const f of fs.readdirSync(OUT).filter((f) => artifacts.test(f))) {
     console.log("  " + f);
   }
