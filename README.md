@@ -2,17 +2,22 @@
 
 A World of Warcraft addon manager that handles **CurseForge, Wago, WoWInterface, and Tukui** in one place — because no existing manager covers CurseForge and Wago together.
 
-![Grimoire](build/icon.png)
+![Grimoire](docs/screenshots/installed.png)
 
 ## Features
 
 - **Auto-detects installed addons** by reading their `.toc` files and install markers — multi-folder addons (BigWigs, ElvUI, Details!) group into a single entry.
 - **Cross-provider updates.** Checks each addon against the provider it was installed from and installs updates in place, backing up the old version first.
 - **Search and browse** across all four providers at once, with typo tolerance, category filtering, and deep pagination.
+
+  ![Browse](docs/screenshots/browse.png)
 - **Per-addon provider choice** so CurseForge and Wago never fight over the same addon.
 - **Release channels** (stable / beta / alpha) — global default plus per-addon overrides, showing only the channels each addon actually publishes.
 - **Provider-health warnings** — flags addons removed from a provider, gone stale, or available fresher elsewhere, with one-click provider switching.
-- **Automatic updates** for Grimoire itself via GitHub Releases.
+- **Retail API-compatibility detection** — compares each addon's Interface version against your actual installed client (read straight from Blizzard's own `.build.info`) and flags anything that predates the current content patch, checking whether another provider already has a fixed build. CurseForge doesn't reliably mark addons as broken after a patch; this catches it anyway. Judged by content-patch era, not every hotfix, so routine patches don't get flagged.
+
+  ![Needs attention](docs/screenshots/needs-attention.png)
+- **Automatic updates** for Grimoire itself via GitHub Releases (Windows and Linux install updates automatically; macOS prompts for a manual download since it isn't code-signed).
 
 ## Setup
 
