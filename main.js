@@ -7,6 +7,16 @@ const providers = require("./src/providers");
 const installer = require("./src/installer");
 const { readBundledKeys } = require("./src/bundledKeys");
 const flavors = require("./src/flavors");
+const {
+  SECRET_FIELDS,
+  createSecretCodec,
+  hasLegacySecrets,
+  redactSecretsInText,
+  hardenFile,
+  secureWriteText,
+  secureCopyFile,
+  applySecretsForSave,
+} = require("./src/credentials");
 let autoUpdater;
 try { ({ autoUpdater } = require("electron-updater")); } catch { /* dev without the dep */ }
 
@@ -22,58 +32,16 @@ const settingsFile = () => path.join(app.getPath("userData"), "settings.json");
 // Fields holding credentials. On disk they live encrypted under "<field>Enc";
 // the bare name is used in memory and by the legacy plaintext format we
 // migrate away from on first launch.
-const SECRET_FIELDS = ["curseApiKey", "wagoApiKey"];
-
 // safeStorage wraps DPAPI on Windows and the Keychain on macOS, so ciphertext
-// is bound to this OS user account. It is unavailable on Linux desktops with
-// no keyring — there we keep working in plaintext rather than lose the keys.
-function encryptionAvailable() {
-  try { return safeStorage.isEncryptionAvailable(); } catch { return false; }
-}
-
-function encryptSecret(value) {
-  if (!value || !encryptionAvailable()) return "";
-  try { return safeStorage.encryptString(value).toString("base64"); } catch { return ""; }
-}
-
-function decryptSecret(blob) {
-  if (!blob) return "";
-  try { return safeStorage.decryptString(Buffer.from(blob, "base64")); } catch { return ""; }
-}
-
-// Pulls credentials out of a parsed settings object, accepting the encrypted
-// form and the legacy plaintext one so upgrades are seamless either way.
-function readSecrets(raw) {
-  const out = {};
-  for (const f of SECRET_FIELDS) {
-    const enc = raw[`${f}Enc`];
-    // If an interrupted migration left both forms behind, a damaged encrypted
-    // value must not hide the still-recoverable legacy plaintext value.
-    out[f] = (enc ? decryptSecret(enc) : "") || raw[f] || "";
-  }
-  return out;
-}
-
-// True when the file still holds plaintext credentials we can upgrade.
-function hasLegacySecrets(raw) {
-  return SECRET_FIELDS.some((f) => raw[f]);
-}
-
-// Best-effort redaction of plaintext credentials in a file we cannot parse.
-function redactSecretsInText(text) {
-  let out = text;
-  for (const f of SECRET_FIELDS) {
-    out = out.replace(new RegExp(`("${f}"\\s*:\\s*)"[^"]*"`, "g"), `$1"<redacted>"`);
-  }
-  return out;
-}
+// is bound to this OS user account.
+const { encryptionAvailable, encryptSecret, readSecrets } = createSecretCodec(safeStorage);
 
 // A corrupt file is kept for recovery, but it must not become another copy of
 // the user's credentials. The name is fixed rather than timestamped so these
 // cannot accumulate the way the old settings.json.corrupt-<ts> files did.
 function preserveCorrupt(file) {
   try {
-    fs.writeFileSync(`${file}.corrupt`, redactSecretsInText(fs.readFileSync(file, "utf8")), "utf8");
+    secureWriteText(`${file}.corrupt`, redactSecretsInText(fs.readFileSync(file, "utf8")));
   } catch { /* best effort — never block startup over this */ }
 }
 
@@ -89,7 +57,7 @@ function migrateSecretsAtRest() {
     // saveSettings snapshots the *previous* file into .bak — which is the
     // plaintext one we are migrating away from. Overwrite it with the
     // encrypted result so no plaintext generation survives the upgrade.
-    try { fs.copyFileSync(file, `${file}.bak`); } catch { /* best effort */ }
+    try { secureCopyFile(file, `${file}.bak`); } catch { /* best effort */ }
   }
 
   // Older builds wrote a timestamped copy on every corrupt read, each holding a
@@ -103,9 +71,16 @@ function migrateSecretsAtRest() {
       const p = path.join(dir, name);
       const text = fs.readFileSync(p, "utf8");
       const redacted = redactSecretsInText(text);
-      if (redacted !== text) fs.writeFileSync(p, redacted, "utf8");
+      if (redacted !== text) secureWriteText(p, redacted);
+      else hardenFile(p);
     }
   } catch { /* best effort */ }
+  // Older versions used the process umask, commonly leaving settings readable
+  // by other local accounts. Ciphertext is still sensitive metadata, and a
+  // legacy file may be plaintext, so every settings generation is owner-only.
+  hardenFile(file);
+  hardenFile(`${file}.bak`);
+  hardenFile(`${file}.corrupt`);
 }
 
 // Probed in order; paths for the other platform simply never exist, so the
@@ -219,11 +194,13 @@ function userVisibleSettings() {
 }
 
 function readUserKeys() {
-  try {
-    return readSecrets(JSON.parse(fs.readFileSync(settingsFile(), "utf8")));
-  } catch {
-    return { curseApiKey: "", wagoApiKey: "" };
+  for (const file of [settingsFile(), `${settingsFile()}.bak`]) {
+    try {
+      const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
+      if (isSettingsObject(parsed)) return readSecrets(parsed);
+    } catch { /* try the backup */ }
   }
+  return { curseApiKey: "", wagoApiKey: "" };
 }
 
 function saveSettings(s) {
@@ -253,40 +230,30 @@ function saveSettings(s) {
     delete suppliedSecrets.wagoApiKey;
   }
 
-  // Credentials are encrypted at rest, so the plaintext field never reaches
-  // disk. If the platform has no keyring we fall back to plaintext rather than
-  // silently dropping the user's keys — a broken app is worse than this file
-  // being no worse than it was before.
+  // New credentials must be encrypted at rest. Existing legacy plaintext is
+  // preserved only when an unrelated internal save passes the same value back;
+  // entering a new key fails clearly if the OS credential service is down.
   let existing = {};
   try { existing = JSON.parse(fs.readFileSync(settingsFile(), "utf8")); } catch {}
-  for (const f of SECRET_FIELDS) {
-    const explicitlySupplied = Object.prototype.hasOwnProperty.call(suppliedSecrets, f);
-    const plain = explicitlySupplied ? suppliedSecrets[f] : "";
-    delete copy[f];
-    delete copy[`${f}Enc`];
-    if (explicitlySupplied) {
-      if (!plain) continue; // explicit empty value removes the saved secret
-      const enc = encryptSecret(plain);
-      if (enc) copy[`${f}Enc`] = enc;
-      else copy[f] = plain;
-    } else if (existing[`${f}Enc`]) {
-      // Unrelated settings changes preserve the ciphertext byte-for-byte.
-      copy[`${f}Enc`] = existing[`${f}Enc`];
-    } else if (existing[f]) {
-      copy[f] = existing[f];
-    }
-  }
+  applySecretsForSave(copy, existing, suppliedSecrets, encryptSecret);
 
   const file = settingsFile();
   fs.mkdirSync(path.dirname(file), { recursive: true });
   // Keep a one-generation backup of the last good file so a corrupt read can
   // recover the user's keys.
-  try { if (fs.existsSync(file)) fs.copyFileSync(file, `${file}.bak`); } catch {}
+  try { if (fs.existsSync(file)) secureCopyFile(file, `${file}.bak`); } catch {}
   // Atomic write: write to a temp file, then rename over the target. A crash
   // mid-write can never leave a truncated/corrupt settings.json.
   const tmp = `${file}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(copy, null, 2), "utf8");
+  secureWriteText(tmp, JSON.stringify(copy, null, 2));
   fs.renameSync(tmp, file);
+  hardenFile(file);
+  // A replacement/removal must not leave the previous key recoverable in the
+  // one-generation backup. Atomic writing already guarantees a valid current
+  // file, so make the backup match the new credential state in this case.
+  if (Object.keys(suppliedSecrets).length) {
+    try { secureCopyFile(file, `${file}.bak`); } catch { /* best effort */ }
+  }
 }
 
 // ---------------------------------------------------------------- window

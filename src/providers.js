@@ -38,9 +38,9 @@ const MAX_JSON_BYTES = 25 * 1024 * 1024;
 
 // Electron's net module rides Chromium's stack, which Cloudflare accepts
 // where plain Node fetch gets flagged.
-function netJson(url, { method = "GET", headers = {}, body } = {}) {
+function netJson(url, { method = "GET", headers = {}, body, redirect = "follow" } = {}) {
   return new Promise((resolve, reject) => {
-    const req = net.request({ method, url, useSessionCookies: true });
+    const req = net.request({ method, url, useSessionCookies: true, redirect });
     let settled = false;
     const finish = (fn, value) => {
       if (settled) return;
@@ -206,6 +206,10 @@ async function cfOfficial(pathname, apiKey, opts = {}) {
   try {
     return await netJson(`${CF_API}${pathname}`, {
       ...opts,
+      // Never forward x-api-key through a redirect. All documented CurseForge
+      // API endpoints are already canonical HTTPS URLs, so a redirect is an
+      // unexpected condition rather than something authentication should follow.
+      redirect: "error",
       headers: { ...(opts.headers || {}), "x-api-key": String(apiKey || "").trim() },
     });
   } catch (err) {
