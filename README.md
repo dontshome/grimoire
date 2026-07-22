@@ -17,10 +17,41 @@ A World of Warcraft addon manager that handles **CurseForge, Wago, WoWInterface,
 ## Setup
 
 1. Download the latest installer from [Releases](https://github.com/dontshome/grimoire/releases) and run it.
-2. On first launch, Grimoire auto-detects your WoW `_retail_` folder (change it in Settings if needed).
+2. On first launch, Grimoire auto-detects your WoW `_retail_` folder (change it in Settings if needed). On Linux, this includes the Battle.net install Lutris's official installer creates (`~/Games/battlenet`), since Battle.net has no native Linux client and always runs through a Wine prefix there.
 3. **CurseForge:** paste a free API key from [console.curseforge.com](https://console.curseforge.com) into Settings. This is required — Grimoire only ever talks to CurseForge through their official API, using your own key.
 4. **Wago:** connects automatically (no key needed). A Patreon token can be added in Settings if you have one.
 5. **WoWInterface / Tukui:** work out of the box, no key.
+
+### Linux
+
+Grimoire ships as an AppImage — no installer, no package manager needed.
+
+1. Download `Grimoire-<version>-linux-x86_64.AppImage` from [Releases](https://github.com/dontshome/grimoire/releases).
+2. Make it executable and run it: `chmod +x Grimoire-*.AppImage && ./Grimoire-*.AppImage` (or just double-click it in your file manager).
+
+That's a working install — nothing else is required. To make it appear in your application menu like a normally-installed program, either:
+
+- Install [AppImageLauncher](https://github.com/TheAssassin/AppImageLauncher) (`sudo dnf install appimagelauncher` on Fedora/Nobara) — it offers to integrate any AppImage the first time you run it, and takes care of everything below automatically.
+- Or do it by hand:
+  ```sh
+  mkdir -p ~/Applications ~/.local/share/applications ~/.local/share/icons/hicolor/512x512/apps
+  cp Grimoire-*.AppImage ~/Applications/Grimoire.AppImage
+  chmod +x ~/Applications/Grimoire.AppImage
+  curl -L -o ~/.local/share/icons/hicolor/512x512/apps/grimoire.png \
+    https://raw.githubusercontent.com/dontshome/grimoire/main/build/icon.png
+  cat > ~/.local/share/applications/grimoire.desktop <<EOF
+  [Desktop Entry]
+  Type=Application
+  Name=Grimoire
+  Comment=World of Warcraft addon manager — CurseForge and Wago in one place
+  Exec=$HOME/Applications/Grimoire.AppImage %U
+  Icon=grimoire
+  Terminal=false
+  Categories=Game;
+  StartupWMClass=grimoire
+  EOF
+  update-desktop-database ~/.local/share/applications
+  ```
 
 ## Building from source
 
