@@ -9,6 +9,7 @@
   "scripts": {
     "start": "electron .",
     "test": "node --test",
+    "verify-build": "node build/verify-build.js",
     "make-icon": "electron build/make-icon.js",
     "dist": "node build/pack.js clean",
     "dist:mac": "node build/pack.js clean",
@@ -34,7 +35,8 @@
       "src/**/*",
       "ui/**/*",
       "build/icon.ico",
-      "bundled.dat"
+      "bundled.dat",
+      "build-info.json"
     ],
     "asarUnpack": [
       "wago-ad-preload.js"
