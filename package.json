@@ -14,6 +14,7 @@
     "dist": "node build/pack.js clean",
     "dist:mac": "node build/pack.js clean",
     "dist:linux": "node build/pack.js clean",
+    "dist:windows": "node build/pack.js clean",
     "dist:dad": "node build/pack.js dad",
     "dist:both": "node build/pack.js both"
   },
