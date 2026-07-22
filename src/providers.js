@@ -124,6 +124,47 @@ function flavorsFromVersions(versions) {
   return FLAVOR_ORDER.filter((f) => set.has(f));
 }
 
+// A provider's declared "supported versions" arrive as either a raw Interface
+// number ("110200") or a dotted client version ("11.2.0") — normalize both to
+// the .toc Interface scheme so they're comparable to the client's own number.
+function interfaceNumFromVersionString(v) {
+  const s = String(v || "").trim();
+  if (/^\d{5,6}$/.test(s)) return parseInt(s, 10);
+  const m = s.match(/^(\d{1,2})\.(\d{1,2})(?:\.(\d{1,2}))?/);
+  if (!m) return null;
+  return parseInt(m[1], 10) * 10000 + parseInt(m[2], 10) * 100 + parseInt(m[3] || "0", 10);
+}
+
+// The highest Interface number this build declares support for. Different
+// flavors' version numbers land in disjoint ranges (Retail's major digit is
+// always the largest in play), so no flavor filtering is needed — the max
+// across every listed version is the right one to compare against a Retail
+// client's Interface number.
+function maxInterfaceNum(versions) {
+  let max = 0;
+  for (const v of versions || []) {
+    const n = interfaceNumFromVersionString(v);
+    if (n && n > max) max = n;
+  }
+  return max || null;
+}
+
+// Retail's addon API breaks at content-patch boundaries (X.Y.0 — a new
+// season, a new raid tier), essentially never within one (X.Y.1, X.Y.2…
+// are hotfixes). Comparing full Interface numbers would flag an addon still
+// on X.Y.0 the moment Blizzard ships an X.Y.1 hotfix, which is just noise —
+// so compatibility is judged by major.minor only, dropping the patch digit.
+function interfaceEra(num) {
+  return Math.floor(num / 100);
+}
+
+// True once the client has moved past the content-patch era this Interface
+// number was built for — the case that actually needs "Load out of date
+// AddOns" and can genuinely break the addon, not just a hotfix behind.
+function interfaceBehindClient(num, clientNum) {
+  return !!(num && clientNum && interfaceEra(num) < interfaceEra(clientNum));
+}
+
 // ---------------------------------------------------------------- curseforge
 
 function cfDownloadUrl(fileId, fileName) {
@@ -197,6 +238,7 @@ function cfModToResult(mod, channel = "stable", gvType = RETAIL_GAME_VERSION_TYP
     logoUrl: (mod.logo && mod.logo.thumbnailUrl) || "",
     categories: (mod.categories || []).map((c) => c.name),
     flavors: flavorsFromVersions(allVersions),
+    interfaceNum: maxInterfaceNum(allVersions),
     channelVersions,
     availableChannels: CHANNELS.filter((c) => channelVersions[c]),
   };
@@ -400,6 +442,7 @@ function wagoToResult(addon, channel = "stable") {
     pageUrl: addon.website_url || addon.url || (addon.slug ? `https://addons.wago.io/addons/${addon.slug}` : ""),
     logoUrl: addon.thumbnail_image || addon.thumbnail || "",
     categories: addon.categories || [],
+    interfaceNum: maxInterfaceNum(patches),
     channelVersions: wagoChannelVersions(addon),
     availableChannels: CHANNELS.filter((c) => wagoChannelVersions(addon)[c]),
   };
@@ -542,6 +585,7 @@ function wowiToResult(f) {
     logoUrl: ((f.UIIMG_Thumbs || [])[0]) || "",
     categories: [],
     flavors: flavorsFromVersions((f.UICompatibility || []).map((c) => c.version)),
+    interfaceNum: maxInterfaceNum((f.UICompatibility || []).map((c) => c.version)),
     // WoWInterface publishes one release stream — no beta/alpha channels.
     availableChannels: [],
     channelVersions: {},
@@ -632,6 +676,7 @@ function tukuiToResult(a) {
     logoUrl: "",
     categories: [],
     flavors: a.patch ? flavorsFromVersions([a.patch]) : ["Retail"],
+    interfaceNum: a.patch ? maxInterfaceNum([a.patch]) : null,
     // Tukui publishes one release stream — no beta/alpha channels.
     availableChannels: [],
     channelVersions: {},
@@ -835,7 +880,20 @@ async function checkUpdates(packages, settings) {
     results.perPackage[p.key] = updateEntry(p, hit);
   }
 
-  await annotateStaleness(packages, results.perPackage, settings);
+  // What the installed client will actually accept right now, read straight
+  // from .build.info — the same number the game itself checks a .toc's
+  // Interface line against, so this needs no provider or network at all.
+  const clientIface = flavors.clientInterfaceFor(settings.wowPath, settings.flavor);
+  if (clientIface) {
+    results.clientInterface = clientIface;
+    for (const p of packages) {
+      if (!interfaceBehindClient((p.gameVersion || {}).num, clientIface.num)) continue;
+      const entry = results.perPackage[p.key] || (results.perPackage[p.key] = {});
+      entry.localInterfaceOutOfDate = true;
+    }
+  }
+
+  await annotateStaleness(packages, results.perPackage, settings, clientIface);
   return results;
 }
 
@@ -853,35 +911,56 @@ function daysSince(dateStr) {
 // Authors move hosts: an addon can sit untouched on CurseForge for a year
 // while its Wago listing gets weekly builds. Checking every alternate every
 // time would be wasteful, so only investigate addons whose active provider
-// already looks stale — usually a handful.
-async function annotateStaleness(packages, perPackage, settings) {
+// already looks stale, or whose active build is behind what the client will
+// accept — usually a handful. Both questions are answered from the same
+// alternate-provider fetch rather than two passes.
+async function annotateStaleness(packages, perPackage, settings, clientIface) {
   const candidates = [];
   for (const p of packages) {
     const u = perPackage[p.key];
     if (!u || u.error || u.needsWagoToken || u.needsCurseKey) continue;
+    const behindClient = !!(clientIface && interfaceBehindClient(u.interfaceNum, clientIface.num));
+    if (behindClient) u.remoteInterfaceBehind = true;
     const age = daysSince(u.fileDate);
-    if (age === null || age < STALE_DAYS) continue;
+    const ageStale = age !== null && age >= STALE_DAYS;
+    if (!ageStale && !behindClient) continue;
+    if (age !== null) u.buildAgeDays = age;
     const alternates = (p.sources || []).filter(
       (s) => s !== u.provider && p[PKG_ID_FIELD[s]] && (s !== "wago" || wagoTokensOf(settings).length)
     );
-    u.buildAgeDays = age;
-    if (alternates.length) candidates.push({ p, u, alternates });
-    else u.staleEverywhere = true; // only one source, and it's gone quiet
+    if (alternates.length) candidates.push({ p, u, alternates, behindClient, ageStale });
+    else {
+      if (behindClient) u.brokenEverywhere = true;
+      if (ageStale) u.staleEverywhere = true; // only one source, and it's gone quiet
+    }
   }
 
-  await mapLimit(candidates, 3, async ({ p, u, alternates }) => {
+  // Age-staleness and interface-incompatibility are independent questions —
+  // a candidate can qualify via either one, so each outcome below is gated on
+  // the flag that actually earned it a look, not on whether the other one held.
+  await mapLimit(candidates, 3, async ({ p, u, alternates, behindClient, ageStale }) => {
     let best = null;
+    let fix = null;
     for (const prov of alternates) {
       try {
         const r = await resolveInstall(prov, p[PKG_ID_FIELD[prov]], settings, channelFor(p, settings));
         if (!r || !r.remoteVersion) continue;
         const age = daysSince(r.fileDate);
-        if (age === null) continue;
-        if (!best || age < best.age) best = { provider: prov, age, result: r };
+        if (age !== null && (!best || age < best.age)) best = { provider: prov, age, result: r };
+        if (behindClient && !fix && r.interfaceNum && !interfaceBehindClient(r.interfaceNum, clientIface.num)) {
+          fix = { provider: prov, remoteVersion: r.remoteVersion, downloadUrl: r.downloadUrl, id: r.id };
+        }
       } catch {
         /* alternate unreachable — nothing to suggest from it */
       }
     }
+    if (behindClient) {
+      if (fix) u.fixedElsewhere = fix;
+      else u.brokenEverywhere = true;
+    }
+
+    if (!ageStale) return; // this candidate was only here for the compat check above
+
     if (!best) {
       u.staleEverywhere = true;
       return;
@@ -1344,5 +1423,5 @@ module.exports = {
   wowiResolveDownload,
   wagoDownloadUrl,
   setWagoRefreshHook,
-  _test: { isUpToDate, compareVersions },
+  _test: { isUpToDate, compareVersions, interfaceNumFromVersionString, maxInterfaceNum, interfaceBehindClient, annotateStaleness },
 };

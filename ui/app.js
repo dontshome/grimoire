@@ -6,6 +6,7 @@ const $$ = (sel) => [...document.querySelectorAll(sel)];
 const state = {
   packages: [],
   updates: {},        // key -> update info from providers
+  clientInterface: null, // { num, version, label } for the installed client, from the last check
   search: "",
   status: "all",      // all | updates
   provider: "all",
@@ -107,7 +108,10 @@ function hasUpdate(pkg) {
 // Provider-health problems: delisted, abandoned, or much fresher elsewhere.
 function needsAttention(pkg) {
   const u = state.updates[pkg.key];
-  return !!(u && (u.removed || u.wasRemovedFrom || u.betterElsewhere || u.staleEverywhere));
+  return !!(
+    u &&
+    (u.removed || u.wasRemovedFrom || u.betterElsewhere || u.staleEverywhere || u.localInterfaceOutOfDate || u.brokenEverywhere)
+  );
 }
 
 // Which provider will actually serve this addon: explicit pin > install
@@ -259,22 +263,42 @@ function renderList() {
     titleblock.append(nameEl, notesEl);
 
     // Surface provider-health warnings right in the row — an addon quietly
-    // abandoned on the host you're using is invisible otherwise.
-    const health = raw && (raw.betterElsewhere || raw.staleEverywhere || raw.wasRemovedFrom);
-    if (health) {
+    // abandoned on the host you're using is invisible otherwise. Genuine API
+    // incompatibility (the game itself will refuse to load it) is the most
+    // actionable problem, so it takes priority over softer "unmaintained" signals.
+    if (raw && raw.fixedElsewhere) {
+      const f = raw.fixedElsewhere;
       const warn = document.createElement("div");
-      warn.className = "addon-health";
-      if (raw.wasRemovedFrom) {
-        warn.classList.add("bad");
-        warn.textContent = `⚠ removed from ${PROVIDER_LABEL[raw.wasRemovedFrom]} — now tracking ${PROVIDER_LABEL[raw.provider]}`;
-      } else if (raw.betterElsewhere) {
-        const b = raw.betterElsewhere;
-        warn.classList.add("bad");
-        warn.textContent = `⚠ ${PROVIDER_LABEL[raw.provider]} build is ${monthsLabel(raw.buildAgeDays)} old — ${PROVIDER_LABEL[b.provider]} has ${b.remoteVersion} from ${monthsLabel(b.ageDays)} ago`;
-      } else {
-        warn.textContent = `no new build in ${monthsLabel(raw.buildAgeDays)} — may be unmaintained`;
-      }
+      warn.className = "addon-health hot";
+      warn.textContent = `⚠ ${PROVIDER_LABEL[raw.provider]}'s build predates the current retail patch — ${PROVIDER_LABEL[f.provider]} has a compatible ${f.remoteVersion}`;
       titleblock.appendChild(warn);
+    } else if (raw && raw.brokenEverywhere) {
+      const warn = document.createElement("div");
+      warn.className = "addon-health hot";
+      warn.textContent = `⚠ no build anywhere yet supports the current retail patch`;
+      titleblock.appendChild(warn);
+    } else if (raw && raw.localInterfaceOutOfDate) {
+      const warn = document.createElement("div");
+      warn.className = "addon-health hot";
+      warn.textContent = `⚠ built for an older retail patch — won't load unless "Load out of date AddOns" is on`;
+      titleblock.appendChild(warn);
+    } else {
+      const health = raw && (raw.betterElsewhere || raw.staleEverywhere || raw.wasRemovedFrom);
+      if (health) {
+        const warn = document.createElement("div");
+        warn.className = "addon-health";
+        if (raw.wasRemovedFrom) {
+          warn.classList.add("bad");
+          warn.textContent = `⚠ removed from ${PROVIDER_LABEL[raw.wasRemovedFrom]} — now tracking ${PROVIDER_LABEL[raw.provider]}`;
+        } else if (raw.betterElsewhere) {
+          const b = raw.betterElsewhere;
+          warn.classList.add("bad");
+          warn.textContent = `⚠ ${PROVIDER_LABEL[raw.provider]} build is ${monthsLabel(raw.buildAgeDays)} old — ${PROVIDER_LABEL[b.provider]} has ${b.remoteVersion} from ${monthsLabel(b.ageDays)} ago`;
+        } else {
+          warn.textContent = `no new build in ${monthsLabel(raw.buildAgeDays)} — may be unmaintained`;
+        }
+        titleblock.appendChild(warn);
+      }
     }
     main.append(icon, titleblock);
 
@@ -315,7 +339,12 @@ function renderList() {
     gamever.className = "cell-gamever";
     const gv = pkg.gameVersion || {};
     gamever.textContent = gv.label || "—";
-    gamever.title = gv.label ? `Built for game version ${gv.label}` : "No Interface version in the addon's files";
+    if (raw && raw.localInterfaceOutOfDate) {
+      gamever.classList.add("outdated");
+      gamever.title = `Built for ${gv.label} — the installed client is on ${(state.clientInterface || {}).label || "a newer patch"}. Will not load unless "Load out of date AddOns" is on.`;
+    } else {
+      gamever.title = gv.label ? `Built for game version ${gv.label}` : "No Interface version in the addon's files";
+    }
 
     // --- provider badge / chooser
     const prov = document.createElement("div");
@@ -460,12 +489,20 @@ async function checkUpdates() {
   try {
     const res = await window.grimoire.checkUpdates(state.packages);
     state.updates = res.perPackage || {};
+    state.clientInterface = res.clientInterface || null;
     for (const err of res.errors || []) toast(err, "error");
     // Provider-health summary — easy to miss scrolling a long list.
     const vals = Object.values(state.updates);
     const moved = vals.filter((u) => u.betterElsewhere).length;
     const removed = vals.filter((u) => u.removed || u.wasRemovedFrom).length;
     const stale = vals.filter((u) => u.staleEverywhere).length;
+    const incompatible = vals.filter((u) => u.localInterfaceOutOfDate || u.brokenEverywhere).length;
+    if (incompatible) {
+      toast(
+        `${incompatible} addon${incompatible === 1 ? " predates" : "s predate"} the current retail patch (${(state.clientInterface || {}).label || "?"}) and may not load.`,
+        "error"
+      );
+    }
     if (removed) toast(`${removed} addon${removed === 1 ? " is" : "s are"} no longer listed on the provider being used.`, "error");
     if (moved) toast(`${moved} addon${moved === 1 ? " has" : "s have"} a much newer build on another provider — open it to switch.`, "error");
     if (stale) toast(`${stale} addon${stale === 1 ? "" : "s"} had no new build in months — possibly unmaintained.`);
@@ -734,10 +771,13 @@ function channelSelector(pkg) {
 
 function openDetailForPackage(pkg) {
   const u = updateFor(pkg);
+  const raw = state.updates[pkg.key];
+  const gvLabel = (pkg.gameVersion || {}).label;
   const kvs = [
     ["Installed version", pkg.version || "—"],
     ["Latest version", u ? u.remoteVersion : ""],
-    ["Game version", (pkg.gameVersion || {}).label ? `${pkg.gameVersion.label}` : ""],
+    ["Game version", raw && raw.localInterfaceOutOfDate ? `${gvLabel} ⚠ behind current retail` : gvLabel || ""],
+    ["Current retail", (state.clientInterface || {}).label || ""],
     ["Category", pkg.category],
     ["Installed via", pkg.installedVia ? PROVIDER_LABEL[pkg.installedVia] : "unknown"],
     ["Downloads", u && u.downloads ? formatDownloads(u.downloads) : ""],
@@ -772,8 +812,22 @@ function openDetailForPackage(pkg) {
     return row;
   });
 
-  const raw = state.updates[pkg.key];
   const actions = [];
+  // A working build exists elsewhere — offer the switch before anything else,
+  // since this addon otherwise won't load on the current retail patch.
+  if (raw && raw.fixedElsewhere) {
+    const f = raw.fixedElsewhere;
+    const btn = document.createElement("button");
+    btn.className = "btn-update";
+    btn.textContent = `Switch to ${PROVIDER_LABEL[f.provider]} (${f.remoteVersion}, retail-compatible)`;
+    btn.title = `Pins this addon to ${PROVIDER_LABEL[f.provider]} and reinstalls it from there.`;
+    btn.addEventListener("click", async () => {
+      await setProviderChoice(pkg, f.provider);
+      closeDetail();
+      reinstallFromProvider(pkg, f.provider);
+    });
+    actions.push(btn);
+  }
   // Offer the one-click move when another provider is clearly maintained.
   if (raw && raw.betterElsewhere) {
     const b = raw.betterElsewhere;
@@ -1430,6 +1484,10 @@ async function boot() {
     $("#toasts").appendChild(t); // persists, same as the Windows update prompt
   });
   await scan();
+  // Check for updates (and API compatibility) right away — otherwise a stale
+  // or newly-incompatible addon sits unflagged until the user remembers to
+  // click "Check for updates" themselves.
+  if (state.packages.length) checkUpdates();
 }
 
 boot();

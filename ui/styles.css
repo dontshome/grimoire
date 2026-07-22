@@ -381,8 +381,11 @@ input:focus { border-color: var(--gold); box-shadow: 0 0 0 3px rgba(200, 162, 74
   margin-top: 2px;
 }
 .addon-health.bad { color: #e0a44b; }
+.addon-health.hot { color: var(--hot); font-weight: 600; }
 
 .cell-latest.warn { color: var(--hot); }
+
+.cell-gamever.outdated { color: var(--hot); font-weight: 600; }
 
 .flavor-select {
   font: inherit;

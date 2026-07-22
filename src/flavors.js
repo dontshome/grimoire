@@ -89,6 +89,67 @@ const CF_TYPE_NAMES = {
 
 const byId = (id) => FLAVORS.find((f) => f.id === id) || FLAVORS[0];
 
+// Blizzard's TACT product code for each flavor's row in .build.info. Only
+// codes confirmed from Blizzard's own build metadata are listed — flavors
+// left unmapped (xptr, the anniversary clients) simply get no client-version
+// check rather than a guessed, possibly-wrong one.
+const BUILD_INFO_PRODUCT = {
+  retail: "wow",
+  ptr: "wowt",
+  beta: "wow_beta",
+  classic: "wow_classic",
+  classic_ptr: "wow_classic_ptr",
+  classic_beta: "wow_classic_beta",
+  classic_era: "wow_classic_era",
+  classic_era_ptr: "wow_classic_era_ptr",
+};
+
+// "11.2.0.58224" -> 110200, the same Interface-number scheme .toc files use
+// (major*10000 + minor*100 + patch).
+function interfaceFromClientVersion(v) {
+  const m = String(v || "").match(/^(\d{1,2})\.(\d{1,2})\.(\d{1,2})/);
+  if (!m) return null;
+  return parseInt(m[1], 10) * 10000 + parseInt(m[2], 10) * 100 + parseInt(m[3], 10);
+}
+
+// The WoW root's .build.info lists every installed product as a pipe-delimited
+// table (one row per client, headers on row 1). This is Blizzard's own record
+// of what's actually installed — the same source the client itself would use
+// to know its version, so comparing against it tells us exactly what the game
+// will accept, no network round-trip required.
+function readBuildInfo(wowRoot) {
+  let raw;
+  try {
+    raw = fs.readFileSync(path.join(wowRoot, ".build.info"), "utf8");
+  } catch {
+    return [];
+  }
+  const lines = raw.split(/\r?\n/).filter(Boolean);
+  if (lines.length < 2) return [];
+  // Header cells look like "Product!STRING:0" — only the name before "!" matters.
+  const headers = lines[0].split("|").map((h) => h.split("!")[0].trim());
+  return lines.slice(1).map((line) => {
+    const cells = line.split("|");
+    const row = {};
+    headers.forEach((h, i) => (row[h] = cells[i]));
+    return row;
+  });
+}
+
+// The exact Interface number the installed client for this flavor will
+// accept right now, or null if the flavor has no known product code or the
+// client hasn't been installed/updated yet.
+function clientInterfaceFor(wowRoot, flavorId) {
+  const product = BUILD_INFO_PRODUCT[flavorId];
+  if (!product || !wowRoot) return null;
+  const rows = readBuildInfo(wowRoot);
+  const row = rows.find((r) => r.Product === product);
+  if (!row || !row.Version) return null;
+  const num = interfaceFromClientVersion(row.Version);
+  if (!num) return null;
+  return { num, version: row.Version, label: `${Math.floor(num / 10000)}.${Math.floor((num % 10000) / 100)}.${num % 100}` };
+}
+
 function addonsDirFor(wowRoot, flavorId) {
   return path.join(wowRoot, byId(flavorId).dir, "Interface", "AddOns");
 }
@@ -128,4 +189,4 @@ function normalizeRoot(p) {
   return p;
 }
 
-module.exports = { FLAVORS, CF_TYPE_NAMES, byId, addonsDirFor, ensureAddonsDir, detectFlavors, normalizeRoot };
+module.exports = { FLAVORS, CF_TYPE_NAMES, byId, addonsDirFor, ensureAddonsDir, detectFlavors, normalizeRoot, clientInterfaceFor };
