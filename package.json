@@ -13,6 +13,7 @@
     "make-icon": "electron build/make-icon.js",
     "dist": "node build/pack.js clean",
     "dist:mac": "node build/pack.js clean",
+    "dist:linux": "node build/pack.js clean",
     "dist:dad": "node build/pack.js dad",
     "dist:both": "node build/pack.js both"
   },
@@ -28,6 +29,7 @@
     "appId": "com.dontshome.grimoire",
     "productName": "Grimoire",
     "artifactName": "${productName}-Setup-${version}.${ext}",
+    "desktopName": "grimoire.desktop",
     "files": [
       "main.js",
       "preload.js",
@@ -86,6 +88,20 @@
       "category": "public.app-category.games",
       "identity": null,
       "minimumSystemVersion": "12.0"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png",
+      "artifactName": "${productName}-${version}-linux-${arch}.${ext}",
+      "category": "Game",
+      "executableName": "grimoire"
     },
     "nsis": {
       "oneClick": false,
