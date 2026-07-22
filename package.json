@@ -29,7 +29,6 @@
     "appId": "com.dontshome.grimoire",
     "productName": "Grimoire",
     "artifactName": "${productName}-Setup-${version}.${ext}",
-    "desktopName": "grimoire.desktop",
     "files": [
       "main.js",
       "preload.js",
