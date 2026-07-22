@@ -152,7 +152,12 @@ function authorKeys() {
 // so running this on macOS produces the dmg/zip, on Linux the AppImage, and on
 // Windows the nsis exe.
 function runBuilder(suffix) {
-  const args = [builderCli];
+  // electron-builder auto-detects CI and implicitly tries to publish to the
+  // "publish" target in package.json (GitHub) unless told not to — it isn't
+  // given a token to do that with here, so left implicit it just fails the
+  // build. Publishing is handled as a separate, explicit step (gh release
+  // upload), not by electron-builder itself.
+  const args = [builderCli, "--publish", "never"];
   if (process.platform === "darwin") {
     args.push("--mac", "-c.mac.artifactName", `\${productName}-\${version}-mac-\${arch}${suffix}.\${ext}`);
   } else if (process.platform === "linux") {
