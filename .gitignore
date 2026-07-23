@@ -11,3 +11,7 @@ settings.json
 *.log
 .DS_Store
 Thumbs.db
+
+# Claude Code tooling is local to whoever uses it — other contributors may
+# use a different assistant or none at all.
+.claude/
