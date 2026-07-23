@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld("grimoire", {
   matchProviders: (packages) => ipcRenderer.invoke("providers:match", packages),
   wagoAdPreloadPath: () => ipcRenderer.invoke("wago:adPreloadPath"),
   wagoStatus: () => ipcRenderer.invoke("wago:status"),
+  getVersion: () => ipcRenderer.invoke("app:getVersion"),
   onWagoConnected: (cb) => ipcRenderer.on("wago:connected", () => cb()),
   onWagoRefresh: (cb) => ipcRenderer.on("wago:refresh", () => cb()),
   onUpdateReady: (cb) => ipcRenderer.on("app:update-ready", (_e, v) => cb(v)),

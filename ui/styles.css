@@ -89,6 +89,7 @@ input:focus { border-color: var(--gold); box-shadow: 0 0 0 3px rgba(200, 162, 74
 }
 
 .tagline { font-size: 11px; color: var(--text-faint); letter-spacing: 1px; }
+.app-version { letter-spacing: normal; opacity: 0.7; }
 
 .search { flex: 1; max-width: 480px; }
 
@@ -506,6 +507,7 @@ input:focus { border-color: var(--gold); box-shadow: 0 0 0 3px rgba(200, 162, 74
 .field-row input { flex: 1; }
 
 .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
+.modal-version { margin-right: auto; align-self: center; }
 
 /* ---------------------------------------------------------------- detail drawer */
 

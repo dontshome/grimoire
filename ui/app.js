@@ -1455,6 +1455,14 @@ function wire() {
 
 async function boot() {
   wire();
+  window.grimoire.getVersion().then((v) => {
+    if (!v) return;
+    const label = `v${v}`;
+    const header = $("#app-version");
+    if (header) header.textContent = label;
+    const inSettings = $("#settings-version");
+    if (inSettings) inSettings.textContent = `Grimoire ${label}`;
+  });
   state.settings = await window.grimoire.getSettings();
   initWagoAd();
   loadBrowseCategories();

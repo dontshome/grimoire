@@ -522,6 +522,8 @@ ipcMain.handle("wago:adPreloadPath", () => {
 
 ipcMain.handle("wago:status", () => ({ connected: !!wagoPublicToken }));
 
+ipcMain.handle("app:getVersion", () => app.getVersion());
+
 ipcMain.handle("addons:scan", () => {
   const s = loadSettings();
   if (!s.wowPath) return { error: "noWowPath", packages: [] };
