@@ -3,6 +3,21 @@
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
 
+// The Wago ad panel needs a moment to hand over a fresh public token on a
+// cold start; a provider/update check that races ahead of it gets a 401 that
+// resolves itself within seconds via wago:refresh (see initWagoAd). Toasting
+// that as an error is just noise, so swallow it during launch — anything
+// past this window is a real, worth-surfacing failure.
+const APP_LAUNCH_AT = Date.now();
+const WAGO_AUTH_GRACE_MS = 20000;
+function toastProviderErrors(errors) {
+  const inGrace = Date.now() - APP_LAUNCH_AT < WAGO_AUTH_GRACE_MS;
+  for (const err of errors || []) {
+    if (inGrace && /^Wago: (HTTP 40[13]|No Wago token yet)\b/.test(err)) continue;
+    toast(err, "error");
+  }
+}
+
 const state = {
   packages: [],
   updates: {},        // key -> update info from providers
@@ -490,7 +505,7 @@ async function checkUpdates() {
     const res = await window.grimoire.checkUpdates(state.packages);
     state.updates = res.perPackage || {};
     state.clientInterface = res.clientInterface || null;
-    for (const err of res.errors || []) toast(err, "error");
+    toastProviderErrors(res.errors);
     // Provider-health summary — easy to miss scrolling a long list.
     const vals = Object.values(state.updates);
     const moved = vals.filter((u) => u.betterElsewhere).length;
@@ -1028,7 +1043,7 @@ async function browseSearch() {
   try {
     const res = await window.grimoire.searchProviders({ query: q, categoryId, categoryName });
     for (const note of res.notes || []) toast(note);
-    for (const err of res.errors || []) toast(err, "error");
+    toastProviderErrors(res.errors);
     if (res.clientInterface) state.clientInterface = res.clientInterface;
     state.browseResults = res.results || [];
     state.browseShown = 30;
@@ -1189,7 +1204,7 @@ async function browseLoadMore() {
       ...state.browseQuery,
       cursor: state.browseCursor,
     });
-    for (const err of res.errors || []) toast(err, "error");
+    toastProviderErrors(res.errors);
     if (res.clientInterface) state.clientInterface = res.clientInterface;
     state.browseResults = res.results || state.browseResults;
     state.browseCursor = res.cursor || state.browseCursor;
