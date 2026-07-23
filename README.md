@@ -31,19 +31,19 @@ A World of Warcraft addon manager that handles **CurseForge, Wago, WoWInterface,
 ### Windows
 
 1. Download `Grimoire-Setup-<version>.exe` from [Releases](https://github.com/dontshome/grimoire/releases) and run it.
-2. The installer is unsigned, so SmartScreen will warn on first run — click **More info → Run anyway**.
+2. Windows will likely show a blue "Windows protected your PC" screen. This just means Grimoire is a small independent app rather than something from a big company — it's expected and normal. Click **More info**, then **Run anyway**.
 
 ### macOS
 
-Grimoire isn't code-signed or notarized (that requires a paid Apple
-Developer account), so Gatekeeper blocks it by default on first launch.
+1. Download `Grimoire-<version>-mac-<arch>.dmg` from [Releases](https://github.com/dontshome/grimoire/releases) — `arm64` if you have an Apple Silicon Mac (M1/M2/M3/M4), `x64` if it's an older Intel Mac.
+2. Open the file and drag Grimoire into your Applications folder.
+3. The first time, don't just double-click it — instead **right-click (or Control-click) Grimoire in Applications and choose Open**, then click **Open** again in the popup that appears. This step is only needed once. (A plain double-click will refuse to open it with no explanation — right-click → Open is what actually lets you through.)
+4. If macOS says Grimoire "is damaged and can't be opened," it isn't really damaged — that's just macOS being extra cautious about apps that aren't from the App Store or a paid developer account. Open the **Terminal** app, paste this line, press Enter, then try opening Grimoire again:
+   ```sh
+   xattr -cr /Applications/Grimoire.app
+   ```
 
-1. Download `Grimoire-<version>-mac-<arch>.dmg` from [Releases](https://github.com/dontshome/grimoire/releases) — `arm64` for Apple Silicon, `x64` for Intel.
-2. Open the dmg and drag Grimoire into Applications.
-3. **Control-click (or right-click) Grimoire in Applications → Open**, then confirm **Open** in the dialog that appears. A plain double-click on an unsigned app just refuses to open with no way through — Control-click → Open is what shows the confirmation dialog instead.
-4. If macOS instead says the app "is damaged and can't be opened," that's Gatekeeper's quarantine flag, not a real problem with the download — clear it with `xattr -cr /Applications/Grimoire.app`, then open normally.
-
-Because it's unsigned, Grimoire also can't auto-update itself on macOS — you'll get a notification with a manual download link when a new version is out instead (see Features above).
+Because Grimoire doesn't have a paid Apple developer certificate, it also can't update itself automatically on Mac the way it does on Windows/Linux — you'll just get a popup with a download link whenever a new version is out.
 
 ### Linux
 
