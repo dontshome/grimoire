@@ -18,6 +18,7 @@ A World of Warcraft addon manager that handles **CurseForge, Wago, WoWInterface,
 
   ![Needs attention](docs/screenshots/needs-attention.png)
 - **Automatic updates** for Grimoire itself via GitHub Releases (Windows and Linux install updates automatically; macOS prompts for a manual download since it isn't code-signed).
+- **Version always visible** — shown in the header and in Settings, so you can tell at a glance what you're running.
 
 ## Setup
 
@@ -26,6 +27,23 @@ A World of Warcraft addon manager that handles **CurseForge, Wago, WoWInterface,
 3. **CurseForge:** paste a free API key from [console.curseforge.com](https://console.curseforge.com) into Settings. This is required — Grimoire only ever talks to CurseForge through their official API, using your own key.
 4. **Wago:** connects automatically (no key needed). A Patreon token can be added in Settings if you have one.
 5. **WoWInterface / Tukui:** work out of the box, no key.
+
+### Windows
+
+1. Download `Grimoire-Setup-<version>.exe` from [Releases](https://github.com/dontshome/grimoire/releases) and run it.
+2. The installer is unsigned, so SmartScreen will warn on first run — click **More info → Run anyway**.
+
+### macOS
+
+Grimoire isn't code-signed or notarized (that requires a paid Apple
+Developer account), so Gatekeeper blocks it by default on first launch.
+
+1. Download `Grimoire-<version>-mac-<arch>.dmg` from [Releases](https://github.com/dontshome/grimoire/releases) — `arm64` for Apple Silicon, `x64` for Intel.
+2. Open the dmg and drag Grimoire into Applications.
+3. **Control-click (or right-click) Grimoire in Applications → Open**, then confirm **Open** in the dialog that appears. A plain double-click on an unsigned app just refuses to open with no way through — Control-click → Open is what shows the confirmation dialog instead.
+4. If macOS instead says the app "is damaged and can't be opened," that's Gatekeeper's quarantine flag, not a real problem with the download — clear it with `xattr -cr /Applications/Grimoire.app`, then open normally.
+
+Because it's unsigned, Grimoire also can't auto-update itself on macOS — you'll get a notification with a manual download link when a new version is out instead (see Features above).
 
 ### Linux
 
@@ -68,9 +86,7 @@ npm start          # run in development
 npm run dist       # build the installer for your OS → dist/
 ```
 
-`npm run dist` builds whatever electron-builder can produce for the host platform: an NSIS installer on Windows, a dmg/zip on macOS, and an AppImage on Linux.
-
-The Windows installer is unsigned, so SmartScreen will warn on first run — choose **More info → Run anyway**. The Linux AppImage just needs `chmod +x` before running.
+`npm run dist` builds whatever electron-builder can produce for the host platform: an NSIS installer on Windows, a dmg/zip on macOS, and an AppImage on Linux. A locally-built installer is unsigned the same way the published releases are — see the platform-specific notes under Setup above for what that means on each OS.
 
 ## How it talks to each provider
 
