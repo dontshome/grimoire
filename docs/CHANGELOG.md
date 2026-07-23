@@ -2,6 +2,70 @@
 
 All notable changes to Grimoire are documented here. Dates are when each version was released. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.0.0] - 2026-07-23
+
+First stable release. Grimoire has covered all four major addon providers,
+all three desktop platforms, and auto-update since early 0.1.x/0.2.x — 1.0
+marks the point where the safety net around that (transactional installs,
+encrypted keys, real compatibility detection) is complete enough to call it
+done, rather than a single new feature.
+
+### Added
+- **Real client-version compatibility detection**, not just "a newer build
+  exists": Grimoire reads your WoW install's actual `.build.info` and flags
+  any addon whose build predates the client's current content patch — the
+  case that can make an addon fail to load or misbehave, which providers
+  don't reliably flag on their own. Judged by patch era (X.Y), not exact
+  build, so routine hotfixes never trigger a false alarm. Surfaced both for
+  already-installed addons and, since 0.2.5, before you install from Browse
+  — with a provider picker when more than one source carries the same
+  addon, and a confirmation prompt before installing a stale build.
+- **Fixed in this release:** multi-folder addons whose sub-modules are
+  declared via `RequiredDeps`/`Dependencies` (DBM's `DBM-Test-Dungeons`,
+  `DBM-Party-*`, etc. — the hyphenated-folder style, as opposed to the
+  `Foo_Bar` underscore convention already handled) are now correctly
+  grouped under their real parent by following that dependency chain. A
+  stale or Classic-only sub-module's own `Interface` line could previously
+  get reported as the whole addon's compatibility — DBM specifically showed
+  a false "game version out of date" despite CurseForge's actual listing
+  being current.
+- One-command Linux installer (`install.sh`): download, `chmod`, and a
+  proper `.desktop`/icon entry, no `sudo`.
+- Auto-check for provider updates on launch, not just on manual request.
+
+### Platform coverage
+- Native builds for Linux (AppImage), macOS (dmg/zip, arm64+x64), and
+  Windows (nsis) — Mac and Windows built via GitHub Actions on real hosted
+  runners. Auto-update via `electron-updater`, verified end-to-end
+  including differential (block-map) downloads on Windows and Linux; macOS
+  has no auto-update (unsigned, no paid Apple Developer cert).
+
+### Security
+- API keys (CurseForge, Wago) encrypted at rest via the OS's own secure
+  storage (Windows DPAPI / macOS Keychain / libsecret on Linux) and never
+  sent back to the UI in decrypted form.
+- Installs are fully transactional — a failure partway through restores
+  the previously installed files, with the backup location always stated
+  if an automatic restore can't complete.
+- Downloaded archives are capped and validated against path-traversal and
+  zip-bomb patterns before extraction.
+- Settings are written atomically with corruption recovery from a backup.
+- Dependencies swept for known CVEs before release (`adm-zip`,
+  `electron-updater`, `electron-builder`) — clean as of this release.
+  GitHub Actions build workflows pinned to exact commit SHAs with scoped
+  credentials.
+
+## [0.2.6] - 2026-07-23
+
+### Changed
+- Quieted a benign toast: a provider check that races the Wago ad panel's
+  token handoff on a cold start could briefly show a 401 as an "error"
+  before resolving itself within seconds — suppressed for the first 20
+  seconds after launch, since it was never a real failure.
+- Retook the README's Browse screenshot, which still showed the
+  pre-0.2.5 undifferentiated Install button instead of the current
+  provider-choice and compatibility-warning behavior.
+
 ## [0.2.5] - 2026-07-23
 
 ### Added

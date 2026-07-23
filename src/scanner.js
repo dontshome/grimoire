@@ -98,9 +98,31 @@ function readFolder(addonsDir, folderName, tocSuffix) {
   };
 }
 
-// Decide which folder a sub-folder belongs to. "BigWigs_Plugins" belongs to
-// "BigWigs" unless it carries its own provider id different from the parent's
-// (ElvUI_WindTools is its own addon even though it's named like a sub-folder).
+// A sub-folder carrying its own provider id that the candidate parent
+// doesn't share is a separate addon that just squats on the parent's name
+// (ElvUI_WindTools vs ElvUI, DBM-PvP vs DBM-Core). No id of its own, or the
+// same id as the parent, means it's genuinely part of that parent.
+function belongsTo(info, parent) {
+  const ownId = info.curseId || info.wagoId;
+  const parentId = parent.curseId || parent.wagoId;
+  return !(ownId && ownId !== parentId);
+}
+
+// The name segment before the first "-" or "_", e.g. "DBM" from both
+// "DBM-Core" and "DBM_StatusBarTimers". Used to keep dependency-chain
+// grouping inside one addon family — without it, an addon with no provider
+// id of its own that happens to depend on some unrelated standalone shared
+// library folder would get silently folded into that library's package.
+function familyToken(folder) {
+  const m = folder.match(/^[^-_]+/);
+  return m ? m[0] : folder;
+}
+
+// Decide which folder a sub-folder belongs to, one hop up. "BigWigs_Plugins"
+// belongs to "BigWigs" (underscore-prefix convention); DBM's many hyphenated
+// modules (DBM-Test-Dungeons, DBM-Challenges, ...) instead declare their real
+// parent via RequiredDeps/Dependencies, so that's checked too, gated to the
+// same name family so it can't cross into an unrelated dependency.
 function parentKeyOf(info, byFolder) {
   if (info.partOf && byFolder[info.partOf]) return info.partOf;
 
@@ -108,17 +130,33 @@ function parentKeyOf(info, byFolder) {
   if (idx > 0) {
     const prefix = info.folder.slice(0, idx);
     const parent = byFolder[prefix];
-    if (parent) {
-      // A sub-folder carrying its own provider id that the parent doesn't
-      // share is a separate addon that just squats on the parent's name
-      // (ElvUI_WindTools vs ElvUI). No id of its own = part of the parent.
-      const ownId = info.curseId || info.wagoId;
-      const parentId = parent.curseId || parent.wagoId;
-      const distinct = ownId && ownId !== parentId;
-      if (!distinct) return prefix;
-    }
+    if (parent && belongsTo(info, parent)) return prefix;
+  }
+
+  const family = familyToken(info.folder);
+  for (const dep of info.deps || []) {
+    if (dep === info.folder) continue;
+    const parent = byFolder[dep];
+    if (parent && familyToken(dep) === family && belongsTo(info, parent)) return dep;
   }
   return null;
+}
+
+// Follow parentKeyOf hop by hop to the ultimate root (DBM-Test-Dungeons ->
+// DBM-Test -> DBM-Core), so multi-level dependency chains collapse into one
+// package keyed by whichever folder turns out not to belong to anything else.
+function resolveRoot(name, byFolder) {
+  const seen = new Set();
+  let cur = name;
+  while (!seen.has(cur)) {
+    seen.add(cur);
+    const info = byFolder[cur];
+    if (!info) break;
+    const parent = parentKeyOf(info, byFolder);
+    if (!parent || parent === cur) break;
+    cur = parent;
+  }
+  return cur;
 }
 
 // "110207, 120007" -> { num: 120007, label: "12.0.7" } (highest listed).
@@ -156,11 +194,9 @@ function scan(addonsDir, tocSuffix = ["Mainline"]) {
   // Group folders into packages.
   const packages = {};
   for (const name of Object.keys(byFolder)) {
-    const info = byFolder[name];
-    const parent = parentKeyOf(info, byFolder);
-    const key = parent || name;
+    const key = resolveRoot(name, byFolder);
     if (!packages[key]) packages[key] = { key, folders: [] };
-    packages[key].folders.push(info);
+    packages[key].folders.push(byFolder[name]);
   }
 
   const result = [];
