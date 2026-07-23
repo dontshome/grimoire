@@ -44,6 +44,22 @@ test("interfaceBehindClient only flags a different content-patch era, not a hotf
   assert.equal(_test.interfaceBehindClient(120000, null), false);
 });
 
+test("mergeResults carries each provider's interfaceNum into the merged row and its provider list", () => {
+  const merged = _test.mergeResults([
+    // No direct download — never picked as primary over one that has it.
+    { name: "DBM", provider: "wowinterface", id: "1", remoteVersion: "3.0", interfaceNum: 110200 },
+    { name: "DBM", provider: "wago", id: "2", remoteVersion: "2.9", downloadUrl: "https://x", interfaceNum: 110100 },
+  ]);
+  assert.equal(merged.length, 1);
+  const row = merged[0];
+  // Wago is the only entry with a direct download, so it becomes primary —
+  // its interfaceNum (not WoWInterface's) must be what the row-level fields report.
+  assert.equal(row.provider, "wago");
+  assert.equal(row.interfaceNum, 110100);
+  const byProvider = Object.fromEntries(row.providers.map((e) => [e.provider, e.interfaceNum]));
+  assert.deepEqual(byProvider, { wowinterface: 110200, wago: 110100 });
+});
+
 test("annotateStaleness flags an interface-incompatible build without misreporting a fresh build as stale-everywhere", async () => {
   // No CurseForge key / Wago token in settings, and no real network available
   // in this test process, so the WoWInterface alternate lookup below rejects

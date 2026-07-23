@@ -878,6 +878,14 @@ function openDetailForResult(r, installedPkg) {
     ["Category", (r.categories || [])[0]],
     ["Installed", installedPkg ? `yes — via ${PROVIDER_LABEL[installedPkg.installedVia] || "unknown"}` : "no"],
   ];
+  if (state.clientInterface) {
+    kvs.push([
+      "Compatibility",
+      entries.some((e) => e.outOfDate)
+        ? `⚠ some providers predate your client (${state.clientInterface.label})`
+        : `matches your client (${state.clientInterface.label})`,
+    ]);
+  }
 
   // One row per provider carrying this addon, each installable directly.
   const provRows = entries.map((e) => {
@@ -893,6 +901,12 @@ function openDetailForResult(r, installedPkg) {
     sub.textContent = [e.remoteVersion, e.downloads ? formatDownloads(e.downloads) + " downloads" : ""]
       .filter(Boolean).join(" · ");
     grow.appendChild(sub);
+    if (e.outOfDate) {
+      const warn = document.createElement("div");
+      warn.className = "addon-health hot";
+      warn.textContent = `⚠ predates your client patch — may not load`;
+      grow.appendChild(warn);
+    }
     row.append(dot, grow);
     if (!installedPkg) {
       const btn = document.createElement("button");
@@ -900,6 +914,7 @@ function openDetailForResult(r, installedPkg) {
       if (e.downloadUrl || e.provider === "wowinterface" || e.provider === "wago") {
         btn.textContent = "Install from here";
         btn.addEventListener("click", () => {
+          if (!confirmStaleInstall(r.name, e)) return;
           closeDetail();
           installFromBrowse({ ...r, ...e }, btn);
         });
@@ -917,7 +932,11 @@ function openDetailForResult(r, installedPkg) {
     const btn = document.createElement("button");
     btn.className = "btn-update";
     btn.textContent = entries.length > 1 ? `Install (${PROVIDER_LABEL[r.provider]})` : "Install";
-    btn.addEventListener("click", () => { closeDetail(); installFromBrowse(r, btn); });
+    btn.addEventListener("click", () => {
+      if (!confirmStaleInstall(r.name, r)) return;
+      closeDetail();
+      installFromBrowse(r, btn);
+    });
     actions.push(btn);
   }
   if (r.pageUrl) actions.push(linkButton("Open addon page ↗", r.pageUrl));
@@ -1010,6 +1029,7 @@ async function browseSearch() {
     const res = await window.grimoire.searchProviders({ query: q, categoryId, categoryName });
     for (const note of res.notes || []) toast(note);
     for (const err of res.errors || []) toast(err, "error");
+    if (res.clientInterface) state.clientInterface = res.clientInterface;
     state.browseResults = res.results || [];
     state.browseShown = 30;
     state.browseQuery = { query: q, categoryId, categoryName };
@@ -1068,6 +1088,13 @@ function renderBrowseResults() {
     const dl = r.downloads ? `${formatDownloads(r.downloads)} downloads · ` : "";
     notesEl.textContent = dl + (r.summary || (r.author ? `by ${r.author}` : ""));
     tb.append(nameEl, notesEl);
+    if (r.localInterfaceOutOfDate) {
+      const warn = document.createElement("div");
+      warn.className = "addon-health hot";
+      warn.textContent = `⚠ built for an older retail patch — won't load unless "Load out of date AddOns" is on`;
+      warn.title = `Built for an older patch than your client${state.clientInterface ? ` (currently ${state.clientInterface.label})` : ""}. Click the row to see if another provider has a current build.`;
+      tb.appendChild(warn);
+    }
     main.append(icon, tb);
 
     const ver = document.createElement("div");
@@ -1109,8 +1136,23 @@ function renderBrowseResults() {
     } else if (r.downloadUrl || r.provider === "wowinterface" || r.provider === "wago") {
       const btn = document.createElement("button");
       btn.className = "btn-update";
-      btn.textContent = "Install";
-      btn.addEventListener("click", (e) => { e.stopPropagation(); installFromBrowse(r, btn); });
+      if (entries.length > 1) {
+        // Multiple providers carry this addon — never guess which one the
+        // user wants. Send them to the picker instead of installing quietly.
+        // The provider badge to the left already names the options, so the
+        // button itself just needs to stay short.
+        btn.textContent = "Choose…";
+        btn.title = `Available from ${entries.length} providers: ${entries.map((e) => PROVIDER_LABEL[e.provider]).join(", ")}. Click to pick one.`;
+        btn.addEventListener("click", (e) => { e.stopPropagation(); openDetailForResult(r, installed); });
+      } else {
+        btn.textContent = "Install";
+        btn.title = `Installs from ${PROVIDER_LABEL[r.provider]}.`;
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          if (!confirmStaleInstall(r.name, r)) return;
+          installFromBrowse(r, btn);
+        });
+      }
       action.appendChild(btn);
     } else {
       const btn = document.createElement("button");
@@ -1148,6 +1190,7 @@ async function browseLoadMore() {
       cursor: state.browseCursor,
     });
     for (const err of res.errors || []) toast(err, "error");
+    if (res.clientInterface) state.clientInterface = res.clientInterface;
     state.browseResults = res.results || state.browseResults;
     state.browseCursor = res.cursor || state.browseCursor;
     state.browseHasMore = !!res.hasMore;
@@ -1170,6 +1213,18 @@ async function browseLoadMore() {
   }
 }
 
+// Warn before installing a build that predates the client's current patch —
+// so the user finds out now, at the point of choosing, rather than from an
+// update-check toast after it's already on disk.
+function confirmStaleInstall(name, e) {
+  if (!(e.outOfDate || e.localInterfaceOutOfDate)) return true;
+  return confirm(
+    `${PROVIDER_LABEL[e.provider] || e.provider}'s build of ${name} (${e.remoteVersion || "?"}) is built for an older ` +
+    `retail patch than your client${state.clientInterface ? ` (currently ${state.clientInterface.label})` : ""}.\n\n` +
+    `It won't load unless "Load out of date AddOns" is on. Install from ${PROVIDER_LABEL[e.provider] || e.provider} anyway?`
+  );
+}
+
 async function installFromBrowse(r, btn) {
   btn.disabled = true;
   btn.textContent = "Installing…";
@@ -1182,7 +1237,7 @@ async function installFromBrowse(r, btn) {
       version: r.remoteVersion,
       folders: [],
     });
-    toast(`${r.name} installed (${res.installedFolders.join(", ")}).`, "ok");
+    toast(`${r.name} installed from ${PROVIDER_LABEL[r.provider] || r.provider} (${res.installedFolders.join(", ")}).`, "ok");
     btn.textContent = "Installed";
     await scan();
     renderBrowseResults();

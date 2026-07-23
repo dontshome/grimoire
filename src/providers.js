@@ -1117,7 +1117,7 @@ async function enrichWithLocalCatalogs(results) {
   for (const r of results) {
     const extra = index.get(normName(r.name));
     if (!extra) continue;
-    r.providers = r.providers || [{ provider: r.provider, id: r.id, remoteVersion: r.remoteVersion, downloadUrl: r.downloadUrl, pageUrl: r.pageUrl, downloads: r.downloads || 0 }];
+    r.providers = r.providers || [{ provider: r.provider, id: r.id, remoteVersion: r.remoteVersion, downloadUrl: r.downloadUrl, pageUrl: r.pageUrl, downloads: r.downloads || 0, interfaceNum: r.interfaceNum || null }];
     for (const e of extra) {
       if (r.providers.some((x) => x.provider === e.provider)) continue;
       r.providers.push({
@@ -1127,6 +1127,7 @@ async function enrichWithLocalCatalogs(results) {
         downloadUrl: e.downloadUrl,
         pageUrl: e.pageUrl,
         downloads: e.downloads || 0,
+        interfaceNum: e.interfaceNum || null,
       });
       if (!r.logoUrl && e.logoUrl) r.logoUrl = e.logoUrl;
     }
@@ -1156,6 +1157,7 @@ function mergeResults(results) {
     downloadUrl: r.downloadUrl,
     pageUrl: r.pageUrl,
     downloads: r.downloads || 0,
+    interfaceNum: r.interfaceNum || null,
   });
   const better = (a, b) => {
     if (!!a.downloadUrl !== !!b.downloadUrl) return a.downloadUrl ? a : b;
@@ -1184,7 +1186,7 @@ function mergeResults(results) {
     // Re-pick the primary provider fields if this one is better.
     const best = better(cur, r);
     if (best === r) {
-      for (const f of ["provider", "id", "remoteVersion", "downloadUrl", "pageUrl"]) cur[f] = r[f];
+      for (const f of ["provider", "id", "remoteVersion", "downloadUrl", "pageUrl", "interfaceNum"]) cur[f] = r[f];
     }
   }
   return [...map.values()];
@@ -1353,6 +1355,21 @@ async function search(
   // real cross-provider choices instead of looking single-sourced.
   await enrichWithLocalCatalogs(out.results);
 
+  // Flag browse results the same way installed addons are flagged, so a user
+  // picking an addon (or a specific provider for it) can see incompatibility
+  // before installing rather than discovering it afterward from an update-check
+  // toast. Read straight from .build.info, same source checkUpdates() uses.
+  const clientIface = flavors.clientInterfaceFor(settings.wowPath, settings.flavor);
+  out.clientInterface = clientIface || null;
+  if (clientIface) {
+    for (const r of out.results) {
+      for (const e of r.providers || [r]) {
+        e.outOfDate = interfaceBehindClient(e.interfaceNum, clientIface.num);
+      }
+      r.localInterfaceOutOfDate = interfaceBehindClient(r.interfaceNum, clientIface.num);
+    }
+  }
+
   // Exact and prefix matches share a tier so download counts decide between
   // them — typing "dbm" should surface Deadly Boss Mods, not a tiny addon
   // that happens to be named exactly "dbm". Weak name matches (score 9,
@@ -1423,5 +1440,5 @@ module.exports = {
   wowiResolveDownload,
   wagoDownloadUrl,
   setWagoRefreshHook,
-  _test: { isUpToDate, compareVersions, interfaceNumFromVersionString, maxInterfaceNum, interfaceBehindClient, annotateStaleness },
+  _test: { isUpToDate, compareVersions, interfaceNumFromVersionString, maxInterfaceNum, interfaceBehindClient, annotateStaleness, mergeResults },
 };
