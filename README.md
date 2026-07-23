@@ -134,7 +134,7 @@ Grimoire is a free, open-source client for managing World of Warcraft addons. Pl
 ## Contributors
 
 - **[dontshome](https://github.com/dontshome)** — author and maintainer.
-- **[Blake Burns Technologies Inc.](https://github.com/Blake-Burns-Technologies)** — macOS support and platform testing; cross-volume (EXDEV) install fix; download, archive, and IPC hardening; CurseForge API key validation; keeping credentials out of the renderer process.
+- **[Blake Burns Technologies Inc.](https://github.com/Blake-Burns-Technologies)** — macOS platform testing and bug reports.
 
 ## License
 
