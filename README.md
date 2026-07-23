@@ -65,7 +65,9 @@ directory, nothing else.)
 Grimoire ships as an AppImage — no installer, no package manager needed.
 
 1. Download `Grimoire-<version>-linux-x86_64.AppImage` from [Releases](https://github.com/dontshome/grimoire/releases).
-2. Make it executable and run it: `chmod +x Grimoire-*.AppImage && ./Grimoire-*.AppImage` (or just double-click it in your file manager).
+2. Make it executable and run it: `chmod +x Grimoire-*.AppImage && ./Grimoire-*.AppImage`.
+
+   (GNOME's Nautilus file manager won't run an AppImage from a double-click — it's been disabled there since 2018 for security reasons, regardless of file permissions. Use a terminal, or the one-command installer above, which adds a proper menu entry that GNOME's app grid *will* launch.)
 
 That's a working install — nothing else is required. To make it appear in your application menu like a normally-installed program, either:
 
@@ -93,6 +95,8 @@ That's a working install — nothing else is required. To make it appear in your
 </details>
 
 **Note for Wayland sessions:** Grimoire runs with GPU hardware acceleration disabled when launched under native Wayland (`XDG_SESSION_TYPE=wayland`). This works around a Chromium GPU-process crash seen on some NVIDIA + Wayland setups during Vulkan initialization. Software rendering has no real visual cost for an addon list — X11 sessions, and every other platform, are unaffected and keep full hardware acceleration.
+
+**Note for newer distros (e.g. Ubuntu 24.04+):** some recent distro releases stopped including `libfuse2` by default, which older AppImages need to mount themselves — if Grimoire fails to start with a FUSE-related error, either install it (`sudo apt install libfuse2t64` on Ubuntu) or run the AppImage with `--appimage-extract-and-run` instead, which works without FUSE at all.
 
 ## Building from source
 
