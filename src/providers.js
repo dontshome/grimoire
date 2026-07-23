@@ -919,7 +919,18 @@ async function annotateStaleness(packages, perPackage, settings, clientIface) {
   for (const p of packages) {
     const u = perPackage[p.key];
     if (!u || u.error || u.needsWagoToken || u.needsCurseKey) continue;
-    const behindClient = !!(clientIface && interfaceBehindClient(u.interfaceNum, clientIface.num));
+    // A provider's own published metadata can lag behind what's actually
+    // installed (the file on disk came from a different provider, or the
+    // author bumped the .toc's Interface line without re-uploading yet) —
+    // that's provider housekeeping, not something broken. The installed
+    // .toc's own Interface line is the one the game client itself checks to
+    // decide whether to load the addon at all, so only chase "does anyone
+    // have a compatible build" when that local check already says no.
+    const behindClient = !!(
+      clientIface &&
+      u.localInterfaceOutOfDate &&
+      interfaceBehindClient(u.interfaceNum, clientIface.num)
+    );
     if (behindClient) u.remoteInterfaceBehind = true;
     const age = daysSince(u.fileDate);
     const ageStale = age !== null && age >= STALE_DAYS;

@@ -29,6 +29,15 @@ done, rather than a single new feature.
   get reported as the whole addon's compatibility — DBM specifically showed
   a false "game version out of date" despite CurseForge's actual listing
   being current.
+- **Also fixed:** a provider's own published file metadata can lag behind
+  what's actually installed (found via the DBM fix above: the installed
+  copy already declared support for the current patch, but the compatibility
+  warning still showed "no build anywhere supports the current retail
+  patch" because the *provider's* listed build hadn't caught up yet).
+  Compatibility warnings now only fire when the installed `.toc`'s own
+  Interface line — the one the game client itself checks — actually says
+  the addon is behind; a provider lagging behind an already-working local
+  copy is no longer reported as broken.
 - One-command Linux installer (`install.sh`): download, `chmod`, and a
   proper `.desktop`/icon entry, no `sudo`.
 - Auto-check for provider updates on launch, not just on manual request.

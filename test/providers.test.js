@@ -73,6 +73,9 @@ test("annotateStaleness flags an interface-incompatible build without misreporti
       provider: "curseforge",
       interfaceNum: 110000, // behind the 11.2.0 client
       fileDate: new Date().toISOString(), // today — must not read as "stale"
+      // The installed .toc's own Interface line agrees the client has moved
+      // past it — the case this flag exists for.
+      localInterfaceOutOfDate: true,
     },
   };
 
@@ -86,6 +89,32 @@ test("annotateStaleness flags an interface-incompatible build without misreporti
   // used to get marked staleEverywhere/betterElsewhere too.
   assert.equal(perPackage.Foo.staleEverywhere, undefined);
   assert.equal(perPackage.Foo.betterElsewhere, undefined);
+});
+
+test("annotateStaleness does not flag a provider's lagging metadata when the installed build is already compatible", async () => {
+  // Real-world shape (DBM-Challenges, 2026-07-23): the installed .toc
+  // already declares an Interface at or past the client's era (so the game
+  // itself will load it fine), but the provider's own published file
+  // metadata hasn't caught up yet. That's the provider's bookkeeping
+  // lagging, not a reason to tell the user their addon is broken.
+  const settings = {};
+  const clientIface = { num: 120007, label: "12.0.7" };
+  const pkg = { key: "Foo", sources: ["curseforge", "wago"], curseId: "111", wagoId: "222" };
+  const perPackage = {
+    Foo: {
+      provider: "curseforge",
+      interfaceNum: 110000, // provider's own file metadata hasn't caught up
+      fileDate: new Date().toISOString(),
+      // localInterfaceOutOfDate intentionally absent: the installed copy's
+      // own .toc already supports (or exceeds) the client's era.
+    },
+  };
+
+  await _test.annotateStaleness([pkg], perPackage, settings, clientIface);
+
+  assert.equal(perPackage.Foo.remoteInterfaceBehind, undefined);
+  assert.equal(perPackage.Foo.brokenEverywhere, undefined);
+  assert.equal(perPackage.Foo.fixedElsewhere, undefined);
 });
 
 test("annotateStaleness leaves age-only staleness behavior unchanged when there is no client interface to compare", async () => {
