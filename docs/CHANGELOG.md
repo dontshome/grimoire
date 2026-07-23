@@ -2,6 +2,18 @@
 
 All notable changes to Grimoire are documented here. Dates are when each version was released. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.0.1] - 2026-07-23
+
+### Fixed
+- A companion module that requires another already-tracked addon (DBM's
+  `DBM-Challenges`, `DBM-PvP`, etc. — small modules that require
+  `DBM-Core` and rarely need their own code changes) was flagged "may be
+  unmaintained" purely from its own infrequent CurseForge upload date,
+  even though the actively-maintained parent addon it rides along with
+  updates constantly. Staleness is now judged against the required addon's
+  own build freshness in that case, not just the dependent's own upload
+  history.
+
 ## [1.0.0] - 2026-07-23
 
 First stable release. Grimoire has covered all four major addon providers,

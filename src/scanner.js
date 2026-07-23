@@ -238,6 +238,25 @@ function scan(addonsDir, tocSuffix = ["Mainline"]) {
       root.version ||
       (folders.find((f) => f.version) || {}).version ||
       "";
+    // This package carries its own distinct provider id (see belongsTo), so
+    // it didn't merge into anything — but it may still declare a same-family
+    // dependency on a package that did resolve as a root elsewhere (DBM-Core
+    // is Core's own root; DBM-Challenges/-PvP/-Party-* stay separate but all
+    // require it). Recorded so a staleness check can tell "this is a quiet
+    // companion module of an actively-maintained addon" from "this looks
+    // abandoned" — its own upload cadence isn't the whole story.
+    let dependsOnKey = null;
+    for (const f of folders) {
+      for (const dep of f.deps || []) {
+        if (dep === key || !byFolder[dep]) continue;
+        const depRoot = resolveRoot(dep, byFolder);
+        if (depRoot !== key && familyToken(depRoot) === familyToken(key)) {
+          dependsOnKey = depRoot;
+          break;
+        }
+      }
+      if (dependsOnKey) break;
+    }
     result.push({
       key,
       name: root.title || key,
@@ -257,6 +276,7 @@ function scan(addonsDir, tocSuffix = ["Mainline"]) {
       tukuiId: ids.tukuiId,
       provider,
       sources,
+      dependsOnKey,
       gameVersion: parseInterfaceVersion(
         root.interface || (folders.find((f) => f.interface) || {}).interface || ""
       ),

@@ -933,7 +933,15 @@ async function annotateStaleness(packages, perPackage, settings, clientIface) {
     );
     if (behindClient) u.remoteInterfaceBehind = true;
     const age = daysSince(u.fileDate);
-    const ageStale = age !== null && age >= STALE_DAYS;
+    // A companion module that requires another tracked addon (DBM-Challenges
+    // requiring DBM-Core, etc.) rides along with its parent rather than
+    // shipping on its own schedule — an old upload date there just means the
+    // feature hasn't needed a code change, not that it's unmaintained. Only
+    // trust that signal when the parent it depends on is itself stale (or
+    // untracked), same as a standalone addon would be judged.
+    const parent = p.dependsOnKey && perPackage[p.dependsOnKey];
+    const parentLooksActive = parent && !parent.error && daysSince(parent.fileDate) !== null && daysSince(parent.fileDate) < STALE_DAYS;
+    const ageStale = age !== null && age >= STALE_DAYS && !parentLooksActive;
     if (!ageStale && !behindClient) continue;
     if (age !== null) u.buildAgeDays = age;
     const alternates = (p.sources || []).filter(

@@ -63,6 +63,10 @@ test("scan groups a multi-hop RequiredDeps chain under its real-id root, ignorin
     // addon (DBM PvP is its own CurseForge project) and must not be merged.
     assert.ok(byKey["DBM-PvP"]);
     assert.deepEqual(byKey["DBM-PvP"].folders, ["DBM-PvP"]);
+    // But it's still recorded as depending on DBM-Core, so a staleness check
+    // can tell it's a companion of an actively-maintained addon rather than
+    // judging it purely by its own upload cadence.
+    assert.equal(byKey["DBM-PvP"].dependsOnKey, "DBM-Core");
   } finally {
     fs.rmSync(addonsDir, { recursive: true, force: true });
   }

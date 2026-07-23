@@ -117,6 +117,61 @@ test("annotateStaleness does not flag a provider's lagging metadata when the ins
   assert.equal(perPackage.Foo.fixedElsewhere, undefined);
 });
 
+test("annotateStaleness does not call a dependent module unmaintained when the addon it requires is actively updated", async () => {
+  // Real-world shape (DBM-Challenges/DBM-PvP, 2026-07-23): these declare
+  // RequiredDeps: DBM-Core and only get their own CurseForge upload every
+  // several months since the feature they cover barely changes — DBM-Core
+  // itself ships constantly. scanner.js records that relationship as
+  // dependsOnKey; annotateStaleness must use it to suppress the false
+  // "may be unmaintained" alarm.
+  const settings = {};
+  const pkg = {
+    key: "DBM-Challenges",
+    sources: ["curseforge"],
+    curseId: "61621",
+    dependsOnKey: "DBM-Core",
+  };
+  const perPackage = {
+    "DBM-Challenges": {
+      provider: "curseforge",
+      fileDate: new Date(Date.now() - 400 * 86400e3).toISOString(), // 13 months old
+    },
+    "DBM-Core": {
+      provider: "curseforge",
+      fileDate: new Date(Date.now() - 5 * 86400e3).toISOString(), // updated days ago
+    },
+  };
+
+  await _test.annotateStaleness([pkg], perPackage, settings, null);
+
+  assert.equal(perPackage["DBM-Challenges"].staleEverywhere, undefined);
+  assert.equal(perPackage["DBM-Challenges"].betterElsewhere, undefined);
+});
+
+test("annotateStaleness still flags a dependent module when the addon it requires has also gone quiet", async () => {
+  const settings = {};
+  const pkg = {
+    key: "DBM-Challenges",
+    sources: ["curseforge"],
+    curseId: "61621",
+    dependsOnKey: "DBM-Core",
+  };
+  const perPackage = {
+    "DBM-Challenges": {
+      provider: "curseforge",
+      fileDate: new Date(Date.now() - 400 * 86400e3).toISOString(),
+    },
+    "DBM-Core": {
+      provider: "curseforge",
+      fileDate: new Date(Date.now() - 400 * 86400e3).toISOString(), // also stale
+    },
+  };
+
+  await _test.annotateStaleness([pkg], perPackage, settings, null);
+
+  assert.equal(perPackage["DBM-Challenges"].staleEverywhere, true);
+});
+
 test("annotateStaleness leaves age-only staleness behavior unchanged when there is no client interface to compare", async () => {
   const settings = {};
   const pkg = { key: "Bar", sources: ["curseforge"], curseId: "111" };
