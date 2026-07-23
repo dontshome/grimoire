@@ -47,6 +47,21 @@ Because Grimoire doesn't have a paid Apple developer certificate, it also can't 
 
 ### Linux
 
+The easiest way — one command installs Grimoire, adds it to your application menu with its icon, and needs no `sudo`:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/dontshome/grimoire/main/install.sh | bash
+```
+
+Run that same command again any time to update to the latest version. (As
+with any script you pipe into `bash`, feel free to
+[read it first](https://github.com/dontshome/grimoire/blob/main/install.sh)
+— it only downloads the AppImage and adds a menu entry under your home
+directory, nothing else.)
+
+<details>
+<summary>Prefer to install by hand instead?</summary>
+
 Grimoire ships as an AppImage — no installer, no package manager needed.
 
 1. Download `Grimoire-<version>-linux-x86_64.AppImage` from [Releases](https://github.com/dontshome/grimoire/releases).
@@ -75,6 +90,7 @@ That's a working install — nothing else is required. To make it appear in your
   EOF
   update-desktop-database ~/.local/share/applications
   ```
+</details>
 
 **Note for Wayland sessions:** Grimoire runs with GPU hardware acceleration disabled when launched under native Wayland (`XDG_SESSION_TYPE=wayland`). This works around a Chromium GPU-process crash seen on some NVIDIA + Wayland setups during Vulkan initialization. Software rendering has no real visual cost for an addon list — X11 sessions, and every other platform, are unaffected and keep full hardware acceleration.
 
