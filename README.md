@@ -23,6 +23,7 @@ A World of Warcraft addon manager that handles **CurseForge, Wago, WoWInterface,
 - [How updates stay safe](#how-updates-stay-safe)
 - [Development](#development)
 - [Troubleshooting](#troubleshooting)
+- [Changelog](#changelog)
 - [Legal & Terms of Use](#legal--terms-of-use)
 - [Contributors](#contributors)
 - [License](#license)
@@ -236,7 +237,8 @@ grimoire/
 ├── ui/                      HTML, CSS, and renderer behavior
 ├── test/                    Node test suite
 ├── build/                   Icons, packaging, and provenance verification
-└── docs/screenshots/        README product screenshots
+├── docs/screenshots/        README product screenshots
+└── docs/CHANGELOG.md        Release history
 ```
 
 </details>
@@ -254,6 +256,10 @@ grimoire/
 | A bad update or uninstall needs reversing | Open the `backups/` folder for your platform (see [How updates stay safe](#how-updates-stay-safe)) and move the saved addon folders back into `Interface/AddOns`. |
 
 For reproducible bugs, open a [GitHub issue](https://github.com/dontshome/grimoire/issues) with your operating system, WoW client flavor, Grimoire version, provider, and the exact error message. Never paste API keys or Wago tokens into an issue.
+
+## Changelog
+
+See [docs/CHANGELOG.md](docs/CHANGELOG.md) for what's changed in each release.
 
 ## Legal & Terms of Use
 
