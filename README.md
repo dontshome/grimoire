@@ -58,6 +58,8 @@ That's a working install — nothing else is required. To make it appear in your
   update-desktop-database ~/.local/share/applications
   ```
 
+**Note for Wayland sessions:** Grimoire runs with GPU hardware acceleration disabled when launched under native Wayland (`XDG_SESSION_TYPE=wayland`). This works around a Chromium GPU-process crash seen on some NVIDIA + Wayland setups during Vulkan initialization. Software rendering has no real visual cost for an addon list — X11 sessions, and every other platform, are unaffected and keep full hardware acceleration.
+
 ## Building from source
 
 ```sh

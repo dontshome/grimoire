@@ -21,6 +21,18 @@ const {
 let autoUpdater;
 try { ({ autoUpdater } = require("electron-updater")); } catch { /* dev without the dep */ }
 
+// Chromium's GPU process can hard-crash during Vulkan/ANGLE init on native
+// Wayland with proprietary GPU drivers (observed as SIGTRAP crashes within
+// seconds of launch, alongside Chromium's own
+// "'--ozone-platform=wayland' is not compatible with Vulkan" warning).
+// Software rendering has no meaningful visual cost for an addon-list app
+// like this, so trade GPU compositing for stability specifically in the one
+// environment known to be at risk — every other session/platform keeps
+// hardware acceleration untouched. Must run before the app is ready.
+if (process.platform === "linux" && process.env.XDG_SESSION_TYPE === "wayland") {
+  app.disableHardwareAcceleration();
+}
+
 // Keys baked into this build (empty for a clean/public build). Loaded once.
 const bundledKeys = readBundledKeys(__dirname);
 
