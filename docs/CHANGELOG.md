@@ -2,6 +2,19 @@
 
 All notable changes to Grimoire are documented here. Dates are when each version was released. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.0.2] - 2026-08-01
+
+Internal maintenance release — no user-facing behavior changes.
+
+### Changed
+- Deduplicated `channelFor`/`channelOfJob` (main process and provider layer
+  had identical implementations) and the CurseForge/Wago/WoWInterface/Tukui
+  provider-id field map, which was hand-copied in three places.
+- Fixed a high-severity `brace-expansion` denial-of-service advisory in
+  `electron-builder`'s own dependency tree (dev/build tooling only —
+  never shipped in the app itself, since it's not reachable from
+  `adm-zip`/`electron-updater`, the app's actual runtime dependencies).
+
 ## [1.0.1] - 2026-07-23
 
 ### Fixed
