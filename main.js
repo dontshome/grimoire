@@ -435,11 +435,10 @@ setInterval(() => {
 // Fold in provider ids discovered by cross-provider matching. Name-matched
 // ids only fill gaps; fingerprint-verified Wago ids replace stale .toc ids.
 function overlayMatchedIds(packages, settings) {
-  const FIELD = { curseforge: "curseId", wago: "wagoId", wowinterface: "wowiId", tukui: "tukuiId" };
   for (const p of packages) {
     const m = (settings.matchedIds || {})[p.key];
     if (!m) continue;
-    for (const [prov, field] of Object.entries(FIELD)) {
+    for (const [prov, field] of Object.entries(providers.PKG_ID_FIELD)) {
       if (!m[prov]) continue;
       if (prov === "wago" ? p[field] !== String(m[prov]) : !p[field]) {
         p[field] = String(m[prov]);
@@ -452,13 +451,6 @@ function overlayMatchedIds(packages, settings) {
 
 function addonsDirOf(settings) {
   return flavors.addonsDirFor(settings.wowPath, settings.flavor);
-}
-
-// Release channel for an install/resolve job: per-addon override, else global.
-function channelOfJob(job, settings) {
-  const per = (settings.channelChoice || {})[job && job.key];
-  const chosen = per || settings.releaseChannel || "stable";
-  return ["stable", "beta", "alpha"].includes(chosen) ? chosen : "stable";
 }
 
 // One-time import of per-addon stability overrides already set in the Wago
@@ -555,7 +547,7 @@ ipcMain.handle("addons:scan", () => {
   overlayMatchedIds(res.packages || [], s);
   if (importWagoAppChannels(res.packages || [], s)) saveSettings(s);
   // Tell the UI which channel each addon resolves to.
-  for (const p of res.packages || []) p.channel = channelOfJob(p, s);
+  for (const p of res.packages || []) p.channel = providers.channelFor(p, s);
   return res;
 });
 
@@ -580,7 +572,7 @@ ipcMain.handle("updates:install", async (_e, job) => {
   // search results, provider switches, stale links).
   flavors.ensureAddonsDir(s.wowPath, s.flavor);
   if (!job.downloadUrl && job.provider && job.id) {
-    const r = await providers.resolveInstall(job.provider, job.id, s, channelOfJob(job, s));
+    const r = await providers.resolveInstall(job.provider, job.id, s, providers.channelFor(job, s));
     if (!r || !r.downloadUrl) throw new Error("No download available from " + job.provider);
     job.downloadUrl = r.downloadUrl;
     job.version = job.version || r.remoteVersion;
@@ -594,7 +586,7 @@ ipcMain.handle("updates:install", async (_e, job) => {
     // Wago download links are signed and expire; on auth failure fetch a
     // fresh link (which also refreshes the token) and retry once.
     if (job.provider === "wago" && job.id && /40[13]/.test(String(err.message))) {
-      const r = await providers.resolveInstall("wago", job.id, s, channelOfJob(job, s));
+      const r = await providers.resolveInstall("wago", job.id, s, providers.channelFor(job, s));
       if (r && r.downloadUrl) {
         job.downloadUrl = providers.wagoDownloadUrl(r.downloadUrl, s);
         return installer.install(job, addonsDirOf(s), app.getPath("userData"));
@@ -642,7 +634,7 @@ ipcMain.handle("providers:categories", async () => {
 
 ipcMain.handle("providers:resolve", async (_e, { provider, id, key }) => {
   const s = loadSettings();
-  return providers.resolveInstall(provider, id, s, channelOfJob({ key }, s));
+  return providers.resolveInstall(provider, id, s, providers.channelFor({ key }, s));
 });
 
 // Cross-provider matching for installed addons that only list one source.

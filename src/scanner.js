@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const { PKG_ID_FIELD } = require("./providers");
 
 // Strip WoW UI escape sequences from .toc strings: |cffab34cd...|r colors,
 // |TInterface\...|t textures, and stray pipes.
@@ -218,7 +219,7 @@ function scan(addonsDir, tocSuffix = ["Mainline"]) {
       tukuiId: firstOf("tukuiId"),
     };
     if (grim && grim.id) {
-      const field = { curseforge: "curseId", wago: "wagoId", wowinterface: "wowiId", tukui: "tukuiId" }[grim.provider];
+      const field = PKG_ID_FIELD[grim.provider];
       if (field && !ids[field]) ids[field] = String(grim.id);
     }
     // Every provider this package is available from.

@@ -1459,5 +1459,7 @@ module.exports = {
   wowiResolveDownload,
   wagoDownloadUrl,
   setWagoRefreshHook,
+  channelFor,
+  PKG_ID_FIELD,
   _test: { isUpToDate, compareVersions, interfaceNumFromVersionString, maxInterfaceNum, interfaceBehindClient, annotateStaleness, mergeResults },
 };
