@@ -54,3 +54,21 @@ test("clientInterfaceFor fails soft when the flavor, row, or file is missing", (
   assert.equal(flavors.clientInterfaceFor(tempDir("grimoire-empty-"), "retail"), null);
   assert.equal(flavors.clientInterfaceFor("", "retail"), null);
 });
+
+test("a _forever_ client is detected as WoW Forever with its own AddOns folder", () => {
+  const root = tempDir("grimoire-forever-");
+  try {
+    fs.mkdirSync(path.join(root, "_retail_", "Interface", "AddOns"), { recursive: true });
+    fs.mkdirSync(path.join(root, "_forever_", "Interface", "AddOns"), { recursive: true });
+    const found = flavors.detectFlavors(root);
+    assert.deepEqual(found.map((f) => f.id), ["retail", "forever"]);
+    assert.equal(found.find((f) => f.id === "forever").label, "Forever");
+    assert.equal(flavors.addonsDirFor(root, "forever"), path.join(root, "_forever_", "Interface", "AddOns"));
+    const forever = flavors.byId("forever");
+    assert.notEqual(forever.cfTypeId, flavors.byId("classic_era").cfTypeId);
+    assert.deepEqual(forever.tocSuffix, ["Forever", "Camelot"]);
+    assert.equal(forever.wago, null);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});

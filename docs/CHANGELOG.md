@@ -2,6 +2,25 @@
 
 All notable changes to Grimoire are documented here. Dates are when each version was released. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- **WoW Forever support.** A `_forever_` client is now detected and managed as
+  its own game version, with its own AddOns folder, `.toc` files
+  (`_Forever`/`_Camelot`) and CurseForge builds. Wago is skipped for Forever
+  until its Wago game-version name is confirmed.
+
+### Fixed
+- WoW Forever addons (game version 1.60.x) were labelled **Classic Era**,
+  because both start with 1. They now get their own "WoW Forever" label and
+  filter.
+- Browse now shows the addons for the game version you're managing by default,
+  instead of every version mixed together. Pick "Any game version" to see all.
+
+### Changed
+- Electron 43 → 45.3.2; macOS 13 or later is now required.
+- License: all rights reserved (free for personal use). v1.0.2 and earlier stay MIT.
+
 ## [1.0.2] - 2026-08-01
 
 Internal maintenance release — no user-facing behavior changes.

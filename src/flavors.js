@@ -1,4 +1,4 @@
-// WoW game flavors (Retail, Classic Era, MoP Classic, PTRs, Beta).
+// WoW game flavors (Retail, Classic Era, MoP Classic, WoW Forever, PTRs, Beta).
 //
 // Each flavor maps a client folder under the WoW root to the identifiers each
 // provider uses for it:
@@ -73,6 +73,19 @@ const FLAVORS = [
     cfTypeId: 67408, wago: "classic", tukui: false, wowiFlavor: "Era",
     tocSuffix: ["Vanilla", "Classic"],
   },
+  {
+    // WoW Forever (client 1.60.x, Interface 16001). Its own client and its own
+    // addons: Classic Era builds (1.15.x) do not load in it, so it must never
+    // share Era's provider ids. Values below are as reported at launch (Nov
+    // 2026) — verify against a live client/API and update here if they change:
+    //   dir "_forever_", .toc suffixes _Forever / _Camelot, CurseForge
+    //   gameVersionTypeId 88568. Wago's game_version name for Forever is not
+    //   yet confirmed, so wago is null and Wago is skipped for this flavor
+    //   rather than guessed (a wrong value would return another game's addons).
+    id: "forever", dir: "_forever_", name: "WoW Forever",
+    cfTypeId: 88568, wago: null, tukui: false, wowiFlavor: "Forever",
+    tocSuffix: ["Forever", "Camelot"],
+  },
 ];
 
 // Other CurseForge version types we may see on files but that have no live
@@ -85,6 +98,7 @@ const CF_TYPE_NAMES = {
   77522: "Cataclysm Classic",
   79434: "MoP Classic",
   81212: "Wrath Titan",
+  88568: "WoW Forever",
 };
 
 const byId = (id) => FLAVORS.find((f) => f.id === id) || FLAVORS[0];
@@ -170,7 +184,7 @@ function detectFlavors(wowRoot) {
     } catch {
       return false;
     }
-  }).map((f) => ({ id: f.id, name: f.name, dir: f.dir }));
+  }).map((f) => ({ id: f.id, name: f.name, dir: f.dir, label: f.wowiFlavor }));
 }
 
 // Create the AddOns folder if the client has never made one.

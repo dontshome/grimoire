@@ -987,6 +987,23 @@ function renderFlavorSwitcher(list, current) {
   }
   if (current) sel.value = current;
   sel.classList.toggle("solo", state.flavors.length <= 1);
+  syncBrowseFilterToFlavor(current);
+}
+
+// Browse shows the managed game version's addons by default, so Retail and
+// WoW Forever (or Classic) results aren't mixed in one list. Only applied when
+// the managed version changes, so a filter the user picked by hand survives
+// rescans. They can still choose "Any game version" to see everything.
+function syncBrowseFilterToFlavor(current) {
+  if (!current || state.browseFilterFlavor === current) return;
+  state.browseFilterFlavor = current;
+  const label = (state.flavors.find((f) => f.id === current) || {}).label;
+  const filter = $("#browse-flavor");
+  if (!filter || !label) return;
+  if ([...filter.options].some((o) => o.value === label)) {
+    filter.value = label;
+    if ((state.browseResults || []).length) renderBrowseResults();
+  }
 }
 
 // Switching game version means a different AddOns folder and different

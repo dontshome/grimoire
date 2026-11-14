@@ -100,20 +100,35 @@ async function mapLimit(items, limit, fn) {
 
 // ---------------------------------------------------------------- game flavors
 
-// "12.0.7" → Retail, "5.5.4" → MoP Classic, "1.15.8" → Classic Era …
+// "12.0.7" → Retail, "5.5.4" → MoP Classic, "1.15.8" → Classic Era,
+// "1.60.1" → WoW Forever …
+// Classic Era and WoW Forever share major version 1, so the minor version
+// tells them apart: Era is 1.13–1.15, Forever is 1.60+. Interface numbers
+// ("11508", "16001") are accepted too, since providers use both forms.
+const FOREVER_MIN_MINOR = 50;
 function flavorOfVersion(v) {
-  const major = parseInt(String(v), 10);
-  if (isNaN(major)) return null;
+  const s = String(v || "").trim();
+  let major, minor;
+  const iface = s.match(/^(\d{1,2})(\d{2})(\d{2})$/);
+  if (iface) {
+    major = parseInt(iface[1], 10);
+    minor = parseInt(iface[2], 10);
+  } else {
+    const m = s.match(/^(\d+)(?:\.(\d+))?/);
+    if (!m) return null;
+    major = parseInt(m[1], 10);
+    minor = m[2] === undefined ? NaN : parseInt(m[2], 10);
+  }
   if (major >= 6) return "Retail";
   if (major === 5) return "MoP";
   if (major === 4) return "Cata";
   if (major === 3) return "Wrath";
   if (major === 2) return "TBC";
-  if (major === 1) return "Era";
+  if (major === 1) return minor >= FOREVER_MIN_MINOR ? "Forever" : "Era";
   return null;
 }
 
-const FLAVOR_ORDER = ["Retail", "MoP", "Cata", "Wrath", "TBC", "Era"];
+const FLAVOR_ORDER = ["Retail", "Forever", "MoP", "Cata", "Wrath", "TBC", "Era"];
 
 function flavorsFromVersions(versions) {
   const set = new Set();
@@ -822,7 +837,11 @@ async function checkUpdates(packages, settings) {
   const fetched = {};
   const jobs = [
     ["curseforge", () => checkCurse(byProvider.curseforge, settings.curseApiKey, (p) => channelFor(p, settings), cfTypeOf(settings))],
-    ["wago", () => checkWago(byProvider.wago, wagoTokens, addonsDir, (p) => channelFor(p, settings), wagoGameOf(settings))],
+    // No known Wago game_version for this flavor (e.g. WoW Forever): skip Wago
+    // rather than ask it about another game's addons.
+    ["wago", () => (wagoGameOf(settings)
+      ? checkWago(byProvider.wago, wagoTokens, addonsDir, (p) => channelFor(p, settings), wagoGameOf(settings))
+      : {})],
     ["wowinterface", () => checkWowi(byProvider.wowinterface)],
     ["tukui", () => checkTukui(byProvider.tukui)],
   ];
@@ -1022,6 +1041,9 @@ async function resolveInstall(provider, id, settings, channel = "stable") {
     return cfModToResult(data.data, channel, cfTypeOf(settings));
   }
   if (provider === "wago") {
+    if (!wagoGameOf(settings)) {
+      throw new Error(`Wago isn't supported for ${flavors.byId(settings.flavor).name} yet.`);
+    }
     const addon = await wagoGet(`/addons/${encodeURIComponent(id)}?game_version=${wagoGameOf(settings)}&stability=${channel}`, wagoTokensOf(settings));
     return wagoToResult(addon, channel);
   }
@@ -1303,13 +1325,16 @@ async function search(
     ["WoWInterface", wowiSearch],
     ...(firstPage
       ? [
-          [
-            "Wago",
-            async () =>
-              q
-                ? await searchWago(q, wagoTokensOf(settings), browseChannel, wagoGameOf(settings))
-                : { results: await popularWago(wagoTokensOf(settings), browseChannel, wagoGameOf(settings)) },
-          ],
+          // Skipped for flavors with no known Wago game_version (WoW Forever).
+          ...(wagoGameOf(settings)
+            ? [[
+                "Wago",
+                async () =>
+                  q
+                    ? await searchWago(q, wagoTokensOf(settings), browseChannel, wagoGameOf(settings))
+                    : { results: await popularWago(wagoTokensOf(settings), browseChannel, wagoGameOf(settings)) },
+              ]]
+            : []),
           // Tukui publishes retail builds only, so it contributes nothing elsewhere.
           ...(flavors.byId(settings.flavor).tukui
             ? [["Tukui", async () => (q ? searchTukui(q) : { results: (await tukuiAddons()).map(tukuiToResult) })]]
@@ -1461,5 +1486,5 @@ module.exports = {
   setWagoRefreshHook,
   channelFor,
   PKG_ID_FIELD,
-  _test: { isUpToDate, compareVersions, interfaceNumFromVersionString, maxInterfaceNum, interfaceBehindClient, annotateStaleness, mergeResults },
+  _test: { flavorOfVersion, flavorsFromVersions, isUpToDate, compareVersions, interfaceNumFromVersionString, maxInterfaceNum, interfaceBehindClient, annotateStaleness, mergeResults },
 };

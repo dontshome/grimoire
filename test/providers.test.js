@@ -188,3 +188,15 @@ test("annotateStaleness leaves age-only staleness behavior unchanged when there 
   assert.equal(perPackage.Bar.brokenEverywhere, undefined);
   assert.equal(perPackage.Bar.remoteInterfaceBehind, undefined);
 });
+
+test("WoW Forever (1.60.x) is its own game version, not Classic Era", () => {
+  assert.equal(_test.flavorOfVersion("1.60.1"), "Forever");
+  assert.equal(_test.flavorOfVersion("16001"), "Forever");
+  assert.equal(_test.flavorOfVersion("1.15.8"), "Era");
+  assert.equal(_test.flavorOfVersion("11508"), "Era");
+  assert.equal(_test.flavorOfVersion("12.0.7"), "Retail");
+  assert.equal(_test.flavorOfVersion("120105"), "Retail");
+  assert.equal(_test.flavorOfVersion("5.5.4"), "MoP");
+  assert.equal(_test.flavorOfVersion("not a version"), null);
+  assert.deepEqual(_test.flavorsFromVersions(["1.15.8", "1.60.1", "12.0.7"]), ["Retail", "Forever", "Era"]);
+});
