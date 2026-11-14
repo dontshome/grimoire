@@ -29,6 +29,10 @@ jobs:
 
       - run: npm ci
 
+      # Electron 45+ downloads its binary lazily on first use. Fetch it now so
+      # parallel test files don't race to download it into the same folder.
+      - run: node node_modules/electron/install.js
+
       - run: npm test
 
       # build/pack.js checks HEAD against origin/main; make sure that ref is
