@@ -81,7 +81,8 @@ const FLAVORS = [
     //     https://addons.wago.io/api/data/game
     //   cfTypeId 88568 — the gameVersionTypeId CurseForge's site uses for its
     //     Forever filter
-    //   dir "_forever_" — as reported by community install guides
+    //   dir "_forever_" and .build.info product "wowf" — confirmed on a live
+    //     install
     id: "forever", dir: "_forever_", name: "WoW Forever",
     cfTypeId: 88568, wago: "forever", tukui: false, wowiFlavor: "Forever",
     tocSuffix: ["Forever", "Camelot"],
@@ -116,6 +117,7 @@ const BUILD_INFO_PRODUCT = {
   classic_beta: "wow_classic_beta",
   classic_era: "wow_classic_era",
   classic_era_ptr: "wow_classic_era_ptr",
+  forever: "wowf", // confirmed from a live install's .build.info (1.60.1.70938)
 };
 
 // "11.2.0.58224" -> 110200, the same Interface-number scheme .toc files use

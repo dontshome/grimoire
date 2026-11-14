@@ -68,6 +68,12 @@ test("a _forever_ client is detected as WoW Forever with its own AddOns folder",
     assert.notEqual(forever.cfTypeId, flavors.byId("classic_era").cfTypeId);
     assert.deepEqual(forever.tocSuffix, ["Forever", "Camelot"]);
     assert.equal(forever.wago, "forever");
+    fs.writeFileSync(
+      path.join(root, ".build.info"),
+      [BUILD_INFO_HEADER, buildInfoRow("wow", "12.1.5.70783"), buildInfoRow("wowf", "1.60.1.70938")].join("\n")
+    );
+    assert.equal(flavors.clientInterfaceFor(root, "forever").num, 16001);
+    assert.equal(flavors.clientInterfaceFor(root, "retail").num, 120105);
     assert.notEqual(forever.wago, flavors.byId("classic_era").wago);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
