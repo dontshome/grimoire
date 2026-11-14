@@ -76,14 +76,14 @@ const FLAVORS = [
   {
     // WoW Forever (client 1.60.x, Interface 16001). Its own client and its own
     // addons: Classic Era builds (1.15.x) do not load in it, so it must never
-    // share Era's provider ids. Values below are as reported at launch (Nov
-    // 2026) — verify against a live client/API and update here if they change:
-    //   dir "_forever_", .toc suffixes _Forever / _Camelot, CurseForge
-    //   gameVersionTypeId 88568. Wago's game_version name for Forever is not
-    //   yet confirmed, so wago is null and Wago is skipped for this flavor
-    //   rather than guessed (a wrong value would return another game's addons).
+    // share Era's provider ids. Sources (Nov 2026):
+    //   wago "forever" and .toc suffixes _Forever/_Camelot — Wago's own
+    //     https://addons.wago.io/api/data/game
+    //   cfTypeId 88568 — the gameVersionTypeId CurseForge's site uses for its
+    //     Forever filter
+    //   dir "_forever_" — as reported by community install guides
     id: "forever", dir: "_forever_", name: "WoW Forever",
-    cfTypeId: 88568, wago: null, tukui: false, wowiFlavor: "Forever",
+    cfTypeId: 88568, wago: "forever", tukui: false, wowiFlavor: "Forever",
     tocSuffix: ["Forever", "Camelot"],
   },
 ];

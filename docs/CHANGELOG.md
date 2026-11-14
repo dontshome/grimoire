@@ -7,8 +7,7 @@ All notable changes to Grimoire are documented here. Dates are when each version
 ### Added
 - **WoW Forever support.** A `_forever_` client is now detected and managed as
   its own game version, with its own AddOns folder, `.toc` files
-  (`_Forever`/`_Camelot`) and CurseForge builds. Wago is skipped for Forever
-  until its Wago game-version name is confirmed.
+  (`_Forever`/`_Camelot`) and its own CurseForge and Wago builds.
 
 ### Fixed
 - WoW Forever addons (game version 1.60.x) were labelled **Classic Era**,
