@@ -15,6 +15,28 @@ NOT PERMITTED without prior written permission from the copyright holder:
   - Selling the Software or using it in any commercial product or service
   - Removing or altering this notice
 
+AUTHORIZED CONTRIBUTOR
+
+Blake Burns Technologies Inc. (github.com/Blake-Burns-Technologies), including
+its employees working on its behalf, is granted written permission to:
+  - Copy, modify, and create derivative works of the source code
+  - Build, run, and test the Software and modified versions of it
+  - Contribute changes to this repository, including by pushing to it directly
+
+This permission does not include redistributing, publishing, or selling the
+Software or modified versions of it outside this repository, which still
+requires separate written permission. The copyright holder may revoke this
+permission in writing at any time, which does not affect changes already
+contributed.
+
+CONTRIBUTIONS
+
+By contributing code or other material to this repository, the contributor
+grants the copyright holder a perpetual, worldwide, royalty-free, irrevocable
+license to use, modify, relicense, and distribute that contribution as part of
+the Software under any terms. Contributors keep the copyright to their own
+contributions.
+
 Viewing and forking this repository on GitHub, as allowed by GitHub's Terms of
 Service, does not grant any of the rights listed above.
 

@@ -284,6 +284,9 @@ Copyright (c) 2026 [dontshome](https://github.com/dontshome). **All rights reser
 Grimoire is free to download and use for personal, non-commercial use. Copying, modifying,
 redistributing or selling it requires written permission. See [LICENSE](LICENSE).
 
+**Blake Burns Technologies Inc.** is an authorized contributor and may copy, modify, build and
+test the code and contribute changes to this repository.
+
 Versions up to and including v1.0.2 were released under the MIT License, and copies of those
 versions keep that license. Code contributed by Blake Burns Technologies Inc. while the project
 was MIT-licensed remains under its MIT notice, which is included in [LICENSE](LICENSE).
