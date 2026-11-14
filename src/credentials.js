@@ -3,19 +3,71 @@ const fs = require("fs");
 const SECRET_FIELDS = ["curseApiKey", "wagoApiKey"];
 const OWNER_ONLY_MODE = 0o600;
 
+// Electron's safeStorage is async-only from Electron 46 (the sync
+// encryptString/decryptString were deprecated in 45). The rest of the app reads
+// settings synchronously, so the async work happens at two well-defined points
+// and is cached here:
+//   init(blobs)      — at startup: check availability and decrypt every stored
+//                      ciphertext once (data written by the old sync API
+//                      decrypts with decryptStringAsync).
+//   prepare(values)  — before a save that may carry a new credential: encrypt
+//                      it ahead of time.
+// encryptSecret/decryptSecret stay synchronous and only read the cache. A
+// value that was never prepared encrypts to "" — the existing save path then
+// refuses to store it rather than writing plaintext.
 function createSecretCodec(safeStorage) {
-  function encryptionAvailable() {
-    try { return safeStorage.isEncryptionAvailable(); } catch { return false; }
+  let available = false;
+  const plainOf = new Map(); // ciphertext (base64) -> plaintext
+  const sealedOf = new Map(); // plaintext -> ciphertext (base64)
+
+  function remember(blob, plain) {
+    plainOf.set(blob, plain);
+    sealedOf.set(plain, blob);
   }
 
+  async function init(blobs = []) {
+    try { available = !!(await safeStorage.isAsyncEncryptionAvailable()); } catch { available = false; }
+    let needsReEncrypt = false;
+    for (const blob of new Set(blobs.filter(Boolean))) {
+      if (plainOf.has(blob)) continue;
+      try {
+        const { result, shouldReEncrypt } = await safeStorage.decryptStringAsync(Buffer.from(blob, "base64"));
+        if (typeof result !== "string") continue;
+        remember(blob, result);
+        if (shouldReEncrypt) needsReEncrypt = true;
+      } catch { /* undecryptable (other OS account, reset keychain): treated as absent */ }
+    }
+    return { needsReEncrypt };
+  }
+
+  // Encrypt values ahead of a save. Values already sealed are reused unless
+  // `force` (key rotation asked for a fresh ciphertext).
+  async function prepare(values = [], { force = false } = {}) {
+    if (!available) return;
+    for (const value of new Set(values.filter((v) => typeof v === "string" && v))) {
+      if (!force && sealedOf.has(value)) continue;
+      try {
+        const blob = (await safeStorage.encryptStringAsync(value)).toString("base64");
+        remember(blob, value);
+      } catch { /* left unsealed; the save will refuse it */ }
+    }
+  }
+
+  function encryptionAvailable() {
+    return available;
+  }
+
+  // Reusing a ciphertext we already hold needs no encryptor, so an unrelated
+  // save keeps working even if the OS credential service went away since
+  // startup. Only new values (sealed by prepare) need encryption available.
   function encryptSecret(value) {
-    if (!value || !encryptionAvailable()) return "";
-    try { return safeStorage.encryptString(value).toString("base64"); } catch { return ""; }
+    if (!value) return "";
+    return sealedOf.get(value) || "";
   }
 
   function decryptSecret(blob) {
     if (!blob) return "";
-    try { return safeStorage.decryptString(Buffer.from(blob, "base64")); } catch { return ""; }
+    return plainOf.get(blob) || "";
   }
 
   function readSecrets(raw) {
@@ -29,7 +81,7 @@ function createSecretCodec(safeStorage) {
     return out;
   }
 
-  return { encryptionAvailable, encryptSecret, decryptSecret, readSecrets };
+  return { init, prepare, encryptionAvailable, encryptSecret, decryptSecret, readSecrets };
 }
 
 function hasLegacySecrets(raw) {

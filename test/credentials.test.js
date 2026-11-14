@@ -14,21 +14,38 @@ const {
   applySecretsForSave,
 } = require("../src/credentials");
 
-function fakeSafeStorage(available = true) {
-  return {
-    isEncryptionAvailable: () => available,
-    encryptString: (value) => Buffer.from(`sealed:${value}`, "utf8"),
-    decryptString: (value) => {
+// Mirrors Electron 45+'s async safeStorage API. Every call counts, so tests
+// can assert nothing is encrypted twice. `rotate` makes decryption report
+// shouldReEncrypt, as after an OS key rotation.
+function fakeSafeStorage({ available = true, rotate = false } = {}) {
+  let n = 0;
+  const fake = {
+    encryptCalls: 0,
+    isAsyncEncryptionAvailable: async () => available,
+    encryptStringAsync: async (value) => {
+      fake.encryptCalls++;
+      return Buffer.from(`sealed${n++}:${value}`, "utf8");
+    },
+    decryptStringAsync: async (value) => {
       const text = value.toString("utf8");
-      if (!text.startsWith("sealed:")) throw new Error("bad ciphertext");
-      return text.slice(7);
+      const m = text.match(/^sealed\d*:/);
+      if (!m) throw new Error("bad ciphertext");
+      return { result: text.slice(m[0].length), shouldReEncrypt: rotate };
     },
   };
+  return fake;
 }
 
-test("secret codec encrypts, decrypts, trims no data, and supports legacy fallback", () => {
+// Ciphertext as written by the OLD synchronous encryptString (same format the
+// fake's decryptStringAsync accepts), to prove existing users' keys still load.
+const legacySealed = (value) => Buffer.from(`sealed:${value}`, "utf8").toString("base64");
+
+test("secret codec encrypts, decrypts, trims no data, and supports legacy fallback", async () => {
   const codec = createSecretCodec(fakeSafeStorage());
+  await codec.init();
+  await codec.prepare(["curse-key"]);
   const encrypted = codec.encryptSecret("curse-key");
+  assert.ok(encrypted);
   assert.notEqual(encrypted, "curse-key");
   assert.deepEqual(codec.readSecrets({ curseApiKeyEnc: encrypted, wagoApiKey: "legacy-wago" }), {
     curseApiKey: "curse-key",
@@ -38,14 +55,56 @@ test("secret codec encrypts, decrypts, trims no data, and supports legacy fallba
   assert.equal(hasLegacySecrets({ curseApiKeyEnc: encrypted }), false);
 });
 
-test("secret codec refuses to produce ciphertext when secure storage is unavailable", () => {
-  const codec = createSecretCodec(fakeSafeStorage(false));
+test("keys saved by the old synchronous API decrypt at startup and are reused, not re-encrypted", async () => {
+  const storage = fakeSafeStorage();
+  const codec = createSecretCodec(storage);
+  const stored = legacySealed("existing-key");
+  const { needsReEncrypt } = await codec.init([stored]);
+  assert.equal(needsReEncrypt, false);
+  assert.equal(codec.readSecrets({ curseApiKeyEnc: stored }).curseApiKey, "existing-key");
+  // An unrelated save passes the decrypted value back; it must keep the
+  // existing ciphertext rather than encrypting again.
+  await codec.prepare(["existing-key"]);
+  assert.equal(codec.encryptSecret("existing-key"), stored);
+  assert.equal(storage.encryptCalls, 0);
+});
+
+test("undecryptable stored keys are treated as absent", async () => {
+  const codec = createSecretCodec(fakeSafeStorage());
+  await codec.init([Buffer.from("garbage").toString("base64")]);
+  assert.equal(codec.readSecrets({ curseApiKeyEnc: Buffer.from("garbage").toString("base64") }).curseApiKey, "");
+});
+
+test("key rotation is reported and a forced prepare produces fresh ciphertext", async () => {
+  const codec = createSecretCodec(fakeSafeStorage({ rotate: true }));
+  const stored = legacySealed("rotating-key");
+  const { needsReEncrypt } = await codec.init([stored]);
+  assert.equal(needsReEncrypt, true);
+  await codec.prepare(["rotating-key"], { force: true });
+  const fresh = codec.encryptSecret("rotating-key");
+  assert.ok(fresh);
+  assert.notEqual(fresh, stored);
+  assert.equal(codec.readSecrets({ curseApiKeyEnc: fresh }).curseApiKey, "rotating-key");
+});
+
+test("secret codec refuses to produce ciphertext when secure storage is unavailable", async () => {
+  const codec = createSecretCodec(fakeSafeStorage({ available: false }));
+  await codec.init();
   assert.equal(codec.encryptionAvailable(), false);
+  await codec.prepare(["must-not-hit-disk"]);
   assert.equal(codec.encryptSecret("must-not-hit-disk"), "");
 });
 
-test("settings saves preserve, replace, and remove credentials without plaintext", () => {
+test("a value that was never prepared is not encrypted (the save then refuses it)", async () => {
   const codec = createSecretCodec(fakeSafeStorage());
+  await codec.init();
+  assert.equal(codec.encryptSecret("not-prepared"), "");
+});
+
+test("settings saves preserve, replace, and remove credentials without plaintext", async () => {
+  const codec = createSecretCodec(fakeSafeStorage());
+  await codec.init();
+  await codec.prepare(["old-key", "new-key"]);
   const oldEncrypted = codec.encryptSecret("old-key");
   const existing = { curseApiKeyEnc: oldEncrypted, wowPath: "/old" };
 

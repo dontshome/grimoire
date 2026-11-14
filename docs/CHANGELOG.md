@@ -17,6 +17,9 @@ All notable changes to Grimoire are documented here. Dates are when each version
   instead of every version mixed together. Pick "Any game version" to see all.
 
 ### Changed
+- API keys are now encrypted and decrypted with Electron's async `safeStorage`
+  API (the synchronous one is deprecated in Electron 45 and removed in 46).
+  Keys saved by earlier versions keep working with no action needed.
 - Electron 43 → 45.3.2; macOS 13 or later is now required.
 - License: all rights reserved (free for personal use). v1.0.2 and earlier stay MIT.
 

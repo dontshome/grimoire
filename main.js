@@ -47,7 +47,27 @@ const settingsFile = () => path.join(app.getPath("userData"), "settings.json");
 // migrate away from on first launch.
 // safeStorage wraps DPAPI on Windows and the Keychain on macOS, so ciphertext
 // is bound to this OS user account.
-const { encryptionAvailable, encryptSecret, readSecrets } = createSecretCodec(safeStorage);
+const secretCodec = createSecretCodec(safeStorage);
+const { encryptionAvailable, encryptSecret, readSecrets } = secretCodec;
+
+// Every stored ciphertext, from settings.json and its backup, so startup can
+// decrypt them all up front (see createSecretCodec).
+function storedSecretBlobs() {
+  const blobs = [];
+  for (const file of [settingsFile(), `${settingsFile()}.bak`]) {
+    try {
+      const raw = JSON.parse(fs.readFileSync(file, "utf8"));
+      for (const f of SECRET_FIELDS) if (raw && typeof raw[`${f}Enc`] === "string") blobs.push(raw[`${f}Enc`]);
+    } catch { /* absent or corrupt */ }
+  }
+  return blobs;
+}
+
+// The credential values in a settings patch, trimmed the way saveSettings
+// trims them, so they can be encrypted before the (synchronous) save.
+function secretsIn(s) {
+  return SECRET_FIELDS.map((f) => (s && typeof s[f] === "string" ? s[f].trim() : "")).filter(Boolean);
+}
 
 // A corrupt file is kept for recovery, but it must not become another copy of
 // the user's credentials. The name is fixed rather than timestamped so these
@@ -60,12 +80,22 @@ function preserveCorrupt(file) {
 
 // One-time upgrade at launch: rewrite plaintext credentials in encrypted form
 // and neutralise the plaintext copies older builds left lying around.
-function migrateSecretsAtRest() {
+async function migrateSecretsAtRest({ needsReEncrypt = false } = {}) {
   const file = settingsFile();
   let raw = null;
   try { raw = JSON.parse(fs.readFileSync(file, "utf8")); } catch { /* absent or corrupt */ }
 
+  // The OS rotated its key (or offers a stronger one): rewrite the stored
+  // ciphertext with a fresh encryption of the same values.
+  if (needsReEncrypt && encryptionAvailable()) {
+    try {
+      await secretCodec.prepare(Object.values(readUserKeys()), { force: true });
+      saveSettings(loadSettings());
+    } catch { /* keep the old ciphertext; it still decrypts */ }
+  }
+
   if (raw && hasLegacySecrets(raw) && encryptionAvailable()) {
+    await secretCodec.prepare(secretsIn(raw));
     saveSettings(loadSettings());
     // saveSettings snapshots the *previous* file into .bak — which is the
     // plaintext one we are migrating away from. Overwrite it with the
@@ -313,9 +343,12 @@ function createWindow() {
   });
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   // Must run after ready — safeStorage has no keyring to talk to before that.
-  migrateSecretsAtRest();
+  // Decrypt stored credentials before anything (the window included) reads
+  // settings, since the synchronous settings readers rely on this cache.
+  const { needsReEncrypt } = await secretCodec.init(storedSecretBlobs());
+  await migrateSecretsAtRest({ needsReEncrypt });
   createWindow();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -484,7 +517,9 @@ function importWagoAppChannels(packages, settings) {
 
 ipcMain.handle("settings:get", () => userVisibleSettings());
 
-ipcMain.handle("settings:save", (_e, s) => {
+ipcMain.handle("settings:save", async (_e, s) => {
+  // A new API key must be encrypted before the synchronous save writes it.
+  await secretCodec.prepare(secretsIn(s));
   saveSettings(s);
   return userVisibleSettings();
 });
