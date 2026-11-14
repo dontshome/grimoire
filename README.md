@@ -1,7 +1,7 @@
 # Grimoire
 
 [![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-303747?style=flat-square)](#install-grimoire)
-[![License: MIT](https://img.shields.io/badge/license-MIT-6dbf73?style=flat-square)](LICENSE)
+[![License: All rights reserved](https://img.shields.io/badge/license-all%20rights%20reserved-b3261e?style=flat-square)](LICENSE)
 [![Electron](https://img.shields.io/badge/Electron-43-47848f?style=flat-square)](https://www.electronjs.org/)
 
 **Your cross-provider World of Warcraft addon manager.**
@@ -263,7 +263,7 @@ See [docs/CHANGELOG.md](docs/CHANGELOG.md) for what's changed in each release.
 
 ## Legal & Terms of Use
 
-Grimoire is a free, open-source client for managing World of Warcraft addons. Please read the following before using or distributing it.
+Grimoire is a free, source-available client for managing World of Warcraft addons. Please read the following before using or distributing it.
 
 **Bring your own credentials.** Grimoire does not include or provide access to any provider's service. To use CurseForge you must supply your own CurseForge API key, obtained directly from CurseForge ([console.curseforge.com](https://console.curseforge.com)). By doing so you agree to CurseForge's and Overwolf's API Terms of Service, and you — not the authors of Grimoire — are responsible for complying with them. The same applies to any Wago, WoWInterface, or Tukui credentials you use. Grimoire acts only as a client that sends requests using the credentials you provide, much like a web browser.
 
@@ -271,7 +271,7 @@ Grimoire is a free, open-source client for managing World of Warcraft addons. Pl
 
 **No affiliation.** Grimoire is an independent project and is not affiliated with, endorsed by, or sponsored by Blizzard Entertainment, Overwolf, CurseForge, Wago, WoWInterface, or Tukui. World of Warcraft is a trademark of Blizzard Entertainment. All product names, logos, and trademarks are the property of their respective owners and are used for identification purposes only.
 
-**No warranty.** Grimoire is provided "as is", without warranty of any kind, under the MIT License. You use it at your own risk.
+**No warranty.** Grimoire is provided "as is", without warranty of any kind. See [LICENSE](LICENSE). You use it at your own risk.
 
 ## Contributors
 
@@ -280,4 +280,10 @@ Grimoire is a free, open-source client for managing World of Warcraft addons. Pl
 
 ## License
 
-[MIT](LICENSE)
+Copyright (c) 2026 [dontshome](https://github.com/dontshome). **All rights reserved.**
+Grimoire is free to download and use for personal, non-commercial use. Copying, modifying,
+redistributing or selling it requires written permission. See [LICENSE](LICENSE).
+
+Versions up to and including v1.0.2 were released under the MIT License, and copies of those
+versions keep that license. Code contributed by Blake Burns Technologies Inc. while the project
+was MIT-licensed remains under its MIT notice, which is included in [LICENSE](LICENSE).

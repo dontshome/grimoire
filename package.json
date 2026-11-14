@@ -5,7 +5,7 @@
   "description": "World of Warcraft addon manager — CurseForge and Wago in one place",
   "main": "main.js",
   "author": "dontshome",
-  "license": "MIT",
+  "license": "SEE LICENSE IN LICENSE",
   "scripts": {
     "start": "electron .",
     "test": "node --test",

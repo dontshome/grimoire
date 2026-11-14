@@ -1,6 +1,47 @@
+Copyright (c) 2026 dontshome (github.com/dontshome). All rights reserved.
+
+Grimoire ("the Software") and its source code are the exclusive property of the
+copyright holder. The source code is published for viewing only. It is not
+open source.
+
+PERMITTED, free of charge:
+  - Downloading the Software from this repository or its official releases
+    and using it on your own devices for personal, non-commercial use.
+
+NOT PERMITTED without prior written permission from the copyright holder:
+  - Copying, modifying, or creating derivative works from the source code
+  - Redistributing, republishing, or reuploading the Software, in original
+    or modified form, including to any app store or download site
+  - Selling the Software or using it in any commercial product or service
+  - Removing or altering this notice
+
+Viewing and forking this repository on GitHub, as allowed by GitHub's Terms of
+Service, does not grant any of the rights listed above.
+
+Versions released before this change (after v1.0.2) were distributed under the MIT License. Copies of those
+versions obtained under that license remain under it. This license applies to
+all later versions.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM,
+DAMAGES, OR OTHER LIABILITY ARISING FROM THE USE OF THE SOFTWARE.
+
+Third-party libraries included with the Software remain under their own
+licenses.
+
+For permission requests, open an issue at https://github.com/dontshome
+
+-------------------------------------------------------------------------------
+CONTRIBUTIONS MADE UNDER THE MIT LICENSE
+
+Portions of the Software were contributed by Blake Burns Technologies Inc.
+(github.com/Blake-Burns-Technologies) while the project was MIT-licensed
+(commits 28d93b1, b985f21, d5d5293). As the MIT License requires, those
+portions remain available under the following notice:
+
 MIT License
 
-Copyright (c) 2026 dontshome
+Copyright (c) 2026 dontshome and contributors
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -19,13 +60,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----
-
-Grimoire is an independent project and is not affiliated with, endorsed by, or
-sponsored by Blizzard Entertainment, Overwolf, CurseForge, Wago, WoWInterface,
-or Tukui. World of Warcraft is a trademark of Blizzard Entertainment. All
-addon content, names, and trademarks belong to their respective owners.
-Grimoire does not host, bundle, or redistribute any addon; it downloads addons
-directly from each provider on the user's behalf using that provider's own
-distribution links.
